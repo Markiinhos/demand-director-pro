@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ export default function Auth() {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
 
   if (loading) {
     return (
@@ -29,6 +31,21 @@ export default function Auth() {
   if (user) {
     return <Navigate to="/" replace />;
   }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Email enviado!', description: 'Verifique sua caixa de entrada para redefinir a senha.' });
+      setForgotMode(false);
+    }
+    setSubmitting(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,82 +92,133 @@ export default function Auth() {
         </div>
 
         <Card className="border-border/50 shadow-lg">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl">
-              {isLogin ? 'Entrar na conta' : 'Criar conta'}
-            </CardTitle>
-            <CardDescription>
-              {isLogin
-                ? 'Use seu email e senha para acessar'
-                : 'Preencha os dados para se cadastrar'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome</Label>
-                  <Input
-                    id="name"
-                    placeholder="Seu nome"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required={!isLogin}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+          {forgotMode ? (
+            <>
+              <CardHeader className="space-y-1 pb-4">
+                <CardTitle className="text-xl">Recuperar senha</CardTitle>
+                <CardDescription>
+                  Digite seu email para receber um link de recuperação
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enviar link de recuperação
+                  </Button>
+                </form>
+                <div className="mt-4 text-center text-sm">
                   <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setForgotMode(false)}
+                    className="text-primary hover:underline font-medium"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    Voltar ao login
                   </button>
                 </div>
-              </div>
+              </CardContent>
+            </>
+          ) : (
+            <>
+              <CardHeader className="space-y-1 pb-4">
+                <CardTitle className="text-xl">
+                  {isLogin ? 'Entrar na conta' : 'Criar conta'}
+                </CardTitle>
+                <CardDescription>
+                  {isLogin
+                    ? 'Use seu email e senha para acessar'
+                    : 'Preencha os dados para se cadastrar'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {!isLogin && (
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nome</Label>
+                      <Input
+                        id="name"
+                        placeholder="Seu nome"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required={!isLogin}
+                      />
+                    </div>
+                  )}
 
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLogin ? 'Entrar' : 'Criar conta'}
-              </Button>
-            </form>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="mt-4 text-center text-sm">
-              <span className="text-muted-foreground">
-                {isLogin ? 'Não tem conta? ' : 'Já tem conta? '}
-              </span>
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-primary hover:underline font-medium"
-              >
-                {isLogin ? 'Criar conta' : 'Entrar'}
-              </button>
-            </div>
-          </CardContent>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Senha</Label>
+                      {isLogin && (
+                        <button
+                          type="button"
+                          onClick={() => setForgotMode(true)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Esqueceu a senha?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isLogin ? 'Entrar' : 'Criar conta'}
+                  </Button>
+                </form>
+
+                <div className="mt-4 text-center text-sm">
+                  <span className="text-muted-foreground">
+                    {isLogin ? 'Não tem conta? ' : 'Já tem conta? '}
+                  </span>
+                  <button
+                    onClick={() => setIsLogin(!isLogin)}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    {isLogin ? 'Criar conta' : 'Entrar'}
+                  </button>
+                </div>
+              </CardContent>
+            </>
+          )}
         </Card>
       </div>
     </div>
