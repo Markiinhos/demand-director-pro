@@ -14,16 +14,427 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      client_feedback: {
+        Row: {
+          client_id: string
+          created_at: string
+          demand_id: string | null
+          id: string
+          message: string
+          status: Database["public"]["Enums"]["feedback_status"]
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          demand_id?: string | null
+          id?: string
+          message: string
+          status?: Database["public"]["Enums"]["feedback_status"]
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          demand_id?: string | null
+          id?: string
+          message?: string
+          status?: Database["public"]["Enums"]["feedback_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_feedback_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_feedback_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "demands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          status: Database["public"]["Enums"]["client_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      demands: {
+        Row: {
+          assigned_to: string | null
+          client_id: string
+          created_at: string
+          delivered_at: string | null
+          description: string | null
+          due_date: string
+          id: string
+          priority: Database["public"]["Enums"]["demand_priority"]
+          status: Database["public"]["Enums"]["demand_status"]
+          title: string
+          type: Database["public"]["Enums"]["demand_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_id: string
+          created_at?: string
+          delivered_at?: string | null
+          description?: string | null
+          due_date: string
+          id?: string
+          priority?: Database["public"]["Enums"]["demand_priority"]
+          status?: Database["public"]["Enums"]["demand_status"]
+          title: string
+          type?: Database["public"]["Enums"]["demand_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          client_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          description?: string | null
+          due_date?: string
+          id?: string
+          priority?: Database["public"]["Enums"]["demand_priority"]
+          status?: Database["public"]["Enums"]["demand_status"]
+          title?: string
+          type?: Database["public"]["Enums"]["demand_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demands_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          demand_id: string | null
+          file_name: string
+          file_type: string | null
+          file_url: string
+          id: string
+          project_id: string | null
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          file_name: string
+          file_type?: string | null
+          file_url: string
+          id?: string
+          project_id?: string | null
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          file_name?: string
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          project_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "demands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_entries: {
+        Row: {
+          amount: number
+          category: string | null
+          client_id: string | null
+          created_at: string
+          demand_id: string | null
+          description: string
+          due_date: string | null
+          id: string
+          paid_at: string | null
+          status: Database["public"]["Enums"]["financial_status"]
+          type: Database["public"]["Enums"]["financial_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description: string
+          due_date?: string | null
+          id?: string
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["financial_status"]
+          type: Database["public"]["Enums"]["financial_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description?: string
+          due_date?: string | null
+          id?: string
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["financial_status"]
+          type?: Database["public"]["Enums"]["financial_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_entries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_entries_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "demands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          role: Database["public"]["Enums"]["profile_role"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id: string
+          name?: string
+          role?: Database["public"]["Enums"]["profile_role"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          role?: Database["public"]["Enums"]["profile_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          client_id: string
+          created_at: string
+          description: string | null
+          end_date: string | null
+          id: string
+          name: string
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          demand_id: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          priority: Database["public"]["Enums"]["task_priority"]
+          project_id: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_demand_id_fkey"
+            columns: ["demand_id"]
+            isOneToOne: false
+            referencedRelation: "demands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_demands_summary: { Args: never; Returns: Json }
+      get_financial_summary: { Args: never; Returns: Json }
+      get_upcoming_payments: { Args: never; Returns: Json }
     }
     Enums: {
-      [_ in never]: never
+      client_status: "lead" | "ativo" | "inativo"
+      demand_priority: "baixa" | "media" | "alta" | "urgente"
+      demand_status: "pendente" | "em_andamento" | "revisao" | "finalizado"
+      demand_type: "post" | "logo" | "banner" | "personalizado" | "outro"
+      feedback_status: "enviado" | "aprovado" | "solicitar_ajuste"
+      financial_status: "pendente" | "pago" | "atrasado"
+      financial_type: "entrada" | "saida"
+      profile_role: "admin" | "designer" | "financeiro"
+      project_status:
+        | "briefing"
+        | "criacao"
+        | "revisao"
+        | "entrega"
+        | "concluido"
+      task_priority: "baixa" | "media" | "alta"
+      task_status: "pendente" | "fazendo" | "concluida"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +561,24 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      client_status: ["lead", "ativo", "inativo"],
+      demand_priority: ["baixa", "media", "alta", "urgente"],
+      demand_status: ["pendente", "em_andamento", "revisao", "finalizado"],
+      demand_type: ["post", "logo", "banner", "personalizado", "outro"],
+      feedback_status: ["enviado", "aprovado", "solicitar_ajuste"],
+      financial_status: ["pendente", "pago", "atrasado"],
+      financial_type: ["entrada", "saida"],
+      profile_role: ["admin", "designer", "financeiro"],
+      project_status: [
+        "briefing",
+        "criacao",
+        "revisao",
+        "entrega",
+        "concluido",
+      ],
+      task_priority: ["baixa", "media", "alta"],
+      task_status: ["pendente", "fazendo", "concluida"],
+    },
   },
 } as const
