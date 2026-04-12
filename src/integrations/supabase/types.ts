@@ -14,6 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
+      budget_items: {
+        Row: {
+          budget_id: string
+          created_at: string
+          description: string | null
+          id: string
+          quantity: number
+          subtotal: number
+          title: string
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          quantity?: number
+          subtotal?: number
+          title: string
+          unit_price?: number
+          user_id: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          quantity?: number
+          subtotal?: number
+          title?: string
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_items_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          client_id: string
+          created_at: string
+          description: string | null
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["budget_status"]
+          title: string
+          total_amount: number
+          updated_at: string
+          user_id: string
+          valid_until: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["budget_status"]
+          title: string
+          total_amount?: number
+          updated_at?: string
+          user_id: string
+          valid_until?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["budget_status"]
+          title?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       client_feedback: {
         Row: {
           client_id: string
@@ -409,6 +495,132 @@ export type Database = {
           },
         ]
       }
+      whatsapp_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          processed?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed?: boolean | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          client_id: string
+          content: string | null
+          conversation_id: string | null
+          created_at: string
+          direction: string
+          error_message: string | null
+          id: string
+          message_type: string
+          metadata: Json | null
+          related_entity_id: string | null
+          related_entity_type: string | null
+          status: string
+          template_name: string | null
+          updated_at: string
+          user_id: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          client_id: string
+          content?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          direction: string
+          error_message?: string | null
+          id?: string
+          message_type: string
+          metadata?: Json | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+          user_id: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          content?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          direction?: string
+          error_message?: string | null
+          id?: string
+          message_type?: string
+          metadata?: Json | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+          user_id?: string
+          wa_message_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_templates: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          language_code: string
+          name: string
+          status: string | null
+          template_key: string
+          updated_at: string
+          user_id: string
+          variables_schema: Json | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          name: string
+          status?: string | null
+          template_key: string
+          updated_at?: string
+          user_id: string
+          variables_schema?: Json | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          name?: string
+          status?: string | null
+          template_key?: string
+          updated_at?: string
+          user_id?: string
+          variables_schema?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -419,6 +631,7 @@ export type Database = {
       get_upcoming_payments: { Args: never; Returns: Json }
     }
     Enums: {
+      budget_status: "rascunho" | "enviado" | "aprovado" | "recusado"
       client_status: "lead" | "ativo" | "inativo"
       demand_priority: "baixa" | "media" | "alta" | "urgente"
       demand_status: "pendente" | "em_andamento" | "revisao" | "finalizado"
@@ -562,6 +775,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      budget_status: ["rascunho", "enviado", "aprovado", "recusado"],
       client_status: ["lead", "ativo", "inativo"],
       demand_priority: ["baixa", "media", "alta", "urgente"],
       demand_status: ["pendente", "em_andamento", "revisao", "finalizado"],
