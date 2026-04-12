@@ -4,18 +4,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { AgencyProvider } from "@/contexts/AgencyContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Demandas from "./pages/Demandas";
-import Prazos from "./pages/Prazos";
 import Clientes from "./pages/Clientes";
-import Equipe from "./pages/Equipe";
-import Pipeline from "./pages/Pipeline";
 import Financeiro from "./pages/Financeiro";
+import Orcamentos from "./pages/Orcamentos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,20 +31,16 @@ const App = () => (
               path="/*"
               element={
                 <ProtectedRoute>
-                  <AgencyProvider>
-                    <AppLayout>
-                      <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/demandas" element={<Demandas />} />
-                        <Route path="/prazos" element={<Prazos />} />
-                        <Route path="/clientes" element={<Clientes />} />
-                        <Route path="/equipe" element={<Equipe />} />
-                        <Route path="/pipeline" element={<Pipeline />} />
-                        <Route path="/financeiro" element={<Financeiro />} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </AppLayout>
-                  </AgencyProvider>
+                  <AppLayout>
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/demandas" element={<Demandas />} />
+                      <Route path="/clientes" element={<Clientes />} />
+                      <Route path="/financeiro" element={<Financeiro />} />
+                      <Route path="/orcamentos" element={<Orcamentos />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
                 </ProtectedRoute>
               }
             />

@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListTodo, Users, UserCircle, TrendingUp, DollarSign, Briefcase, CalendarClock, LogOut } from "lucide-react";
+import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -16,18 +16,16 @@ import {
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Demandas", url: "/demandas", icon: ListTodo },
-  { title: "Prazos", url: "/prazos", icon: CalendarClock },
   { title: "Clientes", url: "/clientes", icon: Users },
-  { title: "Equipe", url: "/equipe", icon: UserCircle },
-  { title: "Pipeline", url: "/pipeline", icon: TrendingUp },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
+  { title: "Orçamentos", url: "/orcamentos", icon: FileText },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { signOut } = useAuth();
 
   return (
     <Sidebar collapsible="icon">
@@ -57,16 +55,8 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                    tooltip={item.title}
-                  >
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/"}
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                    >
+                  <SidebarMenuButton asChild isActive={location.pathname === item.url} tooltip={item.title}>
+                    <NavLink to={item.url} end={item.url === "/"} activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold">
                       <item.icon className="h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
@@ -78,10 +68,8 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <div className="mt-auto px-3 pb-4">
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm"
-          >
+          <button onClick={signOut}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors text-sm">
             <LogOut className="h-4 w-4" />
             {!collapsed && <span>Sair</span>}
           </button>
