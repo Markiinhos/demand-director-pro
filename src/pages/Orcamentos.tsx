@@ -1,7 +1,7 @@
-import { useBudgets, BudgetItem } from "@/hooks/useBudgets";
+import { useBudgets } from "@/hooks/useBudgets";
 import { useClients } from "@/hooks/useClients";
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Copy, Edit, Trash2, Loader2, Search, FileText } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Plus, Copy, Edit, Trash2, Loader2, Search, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Database } from "@/integrations/supabase/types";
+import { exportBudgetPDF } from "@/lib/budgets/export-pdf";
+import { toast } from "sonner";
 
 type BudgetStatus = Database["public"]["Enums"]["budget_status"];
 
@@ -101,6 +103,18 @@ export default function Orcamentos() {
   const formatCurrency = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const isPending = create.isPending || update.isPending;
 
+  const handleExportPDF = async (budgetId: string) => {
+    const budget = budgets.find(b => b.id === budgetId);
+    if (!budget) return;
+    const client = clients.find(c => c.id === budget.client_id);
+    try {
+      const items = await getItems(budgetId);
+      if (items.length === 0) { toast.error("Orçamento sem itens para exportar"); return; }
+      exportBudgetPDF({ budget, items, clientName: client?.name || "Cliente" });
+      toast.success("PDF gerado com sucesso");
+    } catch { toast.error("Erro ao gerar PDF"); }
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
@@ -147,6 +161,7 @@ export default function Orcamentos() {
                 <span className="text-sm font-semibold">{formatCurrency(budget.total_amount)}</span>
                 <Badge variant={st.variant}>{st.label}</Badge>
                 <div className="flex gap-1">
+                  <button onClick={() => handleExportPDF(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Exportar PDF"><Download className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Editar"><Edit className="h-3.5 w-3.5" /></button>
                   <button onClick={() => duplicate.mutate(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Duplicar"><Copy className="h-3.5 w-3.5" /></button>
                   <button onClick={() => setDeleteId(budget.id)} className="p-1.5 rounded hover:bg-destructive/10 text-destructive" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
