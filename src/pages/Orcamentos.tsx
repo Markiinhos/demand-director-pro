@@ -1,6 +1,6 @@
-import { useBudgets, BudgetItem } from "@/hooks/useBudgets";
+import { useBudgets } from "@/hooks/useBudgets";
 import { useClients } from "@/hooks/useClients";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Plus, Copy, Edit, Trash2, Loader2, Search, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Database } from "@/integrations/supabase/types";
 import { exportBudgetPDF } from "@/lib/budgets/export-pdf";
+import { toast } from "sonner";
 
 type BudgetStatus = Database["public"]["Enums"]["budget_status"];
 
