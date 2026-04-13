@@ -33,24 +33,32 @@ export function useFreelancerSettings() {
         .select("*")
         .maybeSingle();
       if (error) throw error;
-      return data as FreelancerSettings | null;
+      if (!data) return null;
+      return {
+        ...data,
+        monthly_costs: Array.isArray(data.monthly_costs) ? data.monthly_costs as unknown as CostItem[] : [],
+      } as FreelancerSettings;
     },
     enabled: !!user,
   });
 
   const upsert = useMutation({
     mutationFn: async (settings: Partial<Omit<FreelancerSettings, "id" | "user_id" | "created_at" | "updated_at">>) => {
+      const payload: Record<string, unknown> = { ...settings };
+      if (settings.monthly_costs) {
+        payload.monthly_costs = JSON.parse(JSON.stringify(settings.monthly_costs));
+      }
       const existing = query.data;
       if (existing) {
         const { error } = await supabase
           .from("freelancer_settings")
-          .update(settings)
+          .update(payload as any)
           .eq("user_id", user!.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("freelancer_settings")
-          .insert({ ...settings, user_id: user!.id } as any);
+          .insert({ ...payload, user_id: user!.id } as any);
         if (error) throw error;
       }
     },
