@@ -161,6 +161,7 @@ export default function Orcamentos() {
                 <span className="text-sm font-semibold">{formatCurrency(budget.total_amount)}</span>
                 <Badge variant={st.variant}>{st.label}</Badge>
                 <div className="flex gap-1">
+                  <button onClick={() => handleExportPDF(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Exportar PDF"><Download className="h-3.5 w-3.5" /></button>
                   <button onClick={() => openEdit(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Editar"><Edit className="h-3.5 w-3.5" /></button>
                   <button onClick={() => duplicate.mutate(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Duplicar"><Copy className="h-3.5 w-3.5" /></button>
                   <button onClick={() => setDeleteId(budget.id)} className="p-1.5 rounded hover:bg-destructive/10 text-destructive" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
