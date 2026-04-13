@@ -1,7 +1,7 @@
 import { useBudgets, BudgetItem } from "@/hooks/useBudgets";
 import { useClients } from "@/hooks/useClients";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Copy, Edit, Trash2, Loader2, Search, FileText } from "lucide-react";
+import { Plus, Copy, Edit, Trash2, Loader2, Search, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Database } from "@/integrations/supabase/types";
+import { exportBudgetPDF } from "@/lib/budgets/export-pdf";
 
 type BudgetStatus = Database["public"]["Enums"]["budget_status"];
 
