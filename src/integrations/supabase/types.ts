@@ -361,6 +361,45 @@ export type Database = {
           },
         ]
       }
+      freelancer_settings: {
+        Row: {
+          calculated_hour_rate: number
+          created_at: string
+          daily_hours: number
+          desired_salary: number
+          id: string
+          monthly_costs: Json
+          updated_at: string
+          user_id: string
+          vacation_weeks: number
+          weekly_days: number
+        }
+        Insert: {
+          calculated_hour_rate?: number
+          created_at?: string
+          daily_hours?: number
+          desired_salary?: number
+          id?: string
+          monthly_costs?: Json
+          updated_at?: string
+          user_id: string
+          vacation_weeks?: number
+          weekly_days?: number
+        }
+        Update: {
+          calculated_hour_rate?: number
+          created_at?: string
+          daily_hours?: number
+          desired_salary?: number
+          id?: string
+          monthly_costs?: Json
+          updated_at?: string
+          user_id?: string
+          vacation_weeks?: number
+          weekly_days?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
