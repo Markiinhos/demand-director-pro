@@ -102,6 +102,18 @@ export default function Orcamentos() {
   const formatCurrency = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const isPending = create.isPending || update.isPending;
 
+  const handleExportPDF = async (budgetId: string) => {
+    const budget = budgets.find(b => b.id === budgetId);
+    if (!budget) return;
+    const client = clients.find(c => c.id === budget.client_id);
+    try {
+      const items = await getItems(budgetId);
+      if (items.length === 0) { toast.error("Orçamento sem itens para exportar"); return; }
+      exportBudgetPDF({ budget, items, clientName: client?.name || "Cliente" });
+      toast.success("PDF gerado com sucesso");
+    } catch { toast.error("Erro ao gerar PDF"); }
+  };
+
   if (isLoading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
