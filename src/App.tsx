@@ -11,6 +11,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Demandas from "./pages/Demandas";
 import Clientes from "./pages/Clientes";
+import Calendario from "./pages/Calendario";
+import Prazos from "./pages/Prazos";
 import Financeiro from "./pages/Financeiro";
 import Orcamentos from "./pages/Orcamentos";
 import Calculadora from "./pages/Calculadora";
@@ -37,6 +39,8 @@ const App = () => (
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/demandas" element={<Demandas />} />
                       <Route path="/clientes" element={<Clientes />} />
+                      <Route path="/calendario" element={<Calendario />} />
+                      <Route path="/prazos" element={<Prazos />} />
                       <Route path="/financeiro" element={<Financeiro />} />
                       <Route path="/orcamentos" element={<Orcamentos />} />
                       <Route path="/calculadora" element={<Calculadora />} />

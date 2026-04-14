@@ -145,40 +145,139 @@ export type Database = {
           },
         ]
       }
-      clients: {
+      client_interactions: {
         Row: {
-          contact_name: string | null
+          client_id: string
           created_at: string
-          email: string | null
+          description: string | null
           id: string
-          name: string
-          notes: string | null
-          phone: string | null
-          status: Database["public"]["Enums"]["client_status"]
+          interaction_date: string
+          interaction_type: Database["public"]["Enums"]["interaction_type"]
+          next_step: string | null
+          next_step_date: string | null
+          responsible: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          contact_name?: string | null
+          client_id: string
           created_at?: string
-          email?: string | null
+          description?: string | null
           id?: string
-          name: string
-          notes?: string | null
-          phone?: string | null
-          status?: Database["public"]["Enums"]["client_status"]
+          interaction_date?: string
+          interaction_type: Database["public"]["Enums"]["interaction_type"]
+          next_step?: string | null
+          next_step_date?: string | null
+          responsible?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          interaction_date?: string
+          interaction_type?: Database["public"]["Enums"]["interaction_type"]
+          next_step?: string | null
+          next_step_date?: string | null
+          responsible?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_interactions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          city: string | null
+          close_potential: Database["public"]["Enums"]["close_potential"] | null
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          first_contact_at: string | null
+          id: string
+          instagram: string | null
+          last_interaction_at: string | null
+          lead_source: string | null
+          lead_stage: Database["public"]["Enums"]["lead_stage"] | null
+          name: string
+          next_action: string | null
+          next_action_date: string | null
+          notes: string | null
+          phone: string | null
+          sales_notes: string | null
+          segment: string | null
+          service_provided: string | null
+          specialty: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["client_status"]
+          type: Database["public"]["Enums"]["client_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          close_potential?:
+            | Database["public"]["Enums"]["close_potential"]
+            | null
           contact_name?: string | null
           created_at?: string
           email?: string | null
+          first_contact_at?: string | null
           id?: string
-          name?: string
+          instagram?: string | null
+          last_interaction_at?: string | null
+          lead_source?: string | null
+          lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          name: string
+          next_action?: string | null
+          next_action_date?: string | null
           notes?: string | null
           phone?: string | null
+          sales_notes?: string | null
+          segment?: string | null
+          service_provided?: string | null
+          specialty?: string | null
+          state?: string | null
           status?: Database["public"]["Enums"]["client_status"]
+          type?: Database["public"]["Enums"]["client_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          close_potential?:
+            | Database["public"]["Enums"]["close_potential"]
+            | null
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          first_contact_at?: string | null
+          id?: string
+          instagram?: string | null
+          last_interaction_at?: string | null
+          lead_source?: string | null
+          lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          name?: string
+          next_action?: string | null
+          next_action_date?: string | null
+          notes?: string | null
+          phone?: string | null
+          sales_notes?: string | null
+          segment?: string | null
+          service_provided?: string | null
+          specialty?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
+          type?: Database["public"]["Enums"]["client_type"]
           updated_at?: string
           user_id?: string
         }
@@ -672,12 +771,31 @@ export type Database = {
     Enums: {
       budget_status: "rascunho" | "enviado" | "aprovado" | "recusado"
       client_status: "lead" | "ativo" | "inativo"
+      client_type: "cliente" | "lead" | "terceirizado" | "parceiro"
+      close_potential: "baixo" | "medio" | "alto"
       demand_priority: "baixa" | "media" | "alta" | "urgente"
       demand_status: "pendente" | "em_andamento" | "revisao" | "finalizado"
       demand_type: "post" | "logo" | "banner" | "personalizado" | "outro"
       feedback_status: "enviado" | "aprovado" | "solicitar_ajuste"
       financial_status: "pendente" | "pago" | "atrasado"
       financial_type: "entrada" | "saida"
+      interaction_type:
+        | "ligacao"
+        | "whatsapp"
+        | "reuniao"
+        | "proposta"
+        | "followup"
+        | "fechamento"
+        | "sem_retorno"
+      lead_stage:
+        | "novo_lead"
+        | "contato_inicial"
+        | "briefing"
+        | "proposta_enviada"
+        | "negociacao"
+        | "aprovado"
+        | "perdido"
+        | "inativo"
       profile_role: "admin" | "designer" | "financeiro"
       project_status:
         | "briefing"
@@ -816,12 +934,33 @@ export const Constants = {
     Enums: {
       budget_status: ["rascunho", "enviado", "aprovado", "recusado"],
       client_status: ["lead", "ativo", "inativo"],
+      client_type: ["cliente", "lead", "terceirizado", "parceiro"],
+      close_potential: ["baixo", "medio", "alto"],
       demand_priority: ["baixa", "media", "alta", "urgente"],
       demand_status: ["pendente", "em_andamento", "revisao", "finalizado"],
       demand_type: ["post", "logo", "banner", "personalizado", "outro"],
       feedback_status: ["enviado", "aprovado", "solicitar_ajuste"],
       financial_status: ["pendente", "pago", "atrasado"],
       financial_type: ["entrada", "saida"],
+      interaction_type: [
+        "ligacao",
+        "whatsapp",
+        "reuniao",
+        "proposta",
+        "followup",
+        "fechamento",
+        "sem_retorno",
+      ],
+      lead_stage: [
+        "novo_lead",
+        "contato_inicial",
+        "briefing",
+        "proposta_enviada",
+        "negociacao",
+        "aprovado",
+        "perdido",
+        "inativo",
+      ],
       profile_role: ["admin", "designer", "financeiro"],
       project_status: [
         "briefing",
