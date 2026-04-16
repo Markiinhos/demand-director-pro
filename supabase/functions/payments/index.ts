@@ -398,15 +398,7 @@ function isValidCpf(value?: string): boolean {
   return remainder === Number(value[10]);
 }
 
-function isPlaceholderEmail(email: string): boolean {
-  const normalized = email.trim().toLowerCase();
-  return ["cliente@email.com", "cliente@cliente.com", "test@test.com", "email@example.com"].includes(normalized);
-}
-
-function isTestUserEmail(email: string): boolean {
-  const normalized = email.trim().toLowerCase();
-  return normalized.includes("@testuser.com") || normalized.startsWith("test_user_") || normalized.includes("+testuser");
-}
+// Removed isPlaceholderEmail and isTestUserEmail — they were incorrectly blocking real payer data
 
 function splitFullName(fullName?: string) {
   const normalized = safeTrim(fullName);
@@ -453,31 +445,15 @@ async function resolvePayer(supabase: SupabaseClient, clientId: string, payload:
 
 function validatePayer(
   payer: { email?: string; firstName?: string; lastName?: string; cpf?: string },
-  environment: MPEnvironment,
+  _environment: MPEnvironment,
   operation: ChargeOperation,
 ) {
   if (!payer.email) {
-    throw new HttpError(
-      400,
-      environment === "production"
-        ? "Informe um e-mail real do cliente para cobranças em produção."
-        : "Informe o e-mail do pagador.",
-    );
+    throw new HttpError(400, "Informe o e-mail do pagador.");
   }
 
   if (!isValidEmail(payer.email)) {
     throw new HttpError(400, "E-mail do pagador inválido.");
-  }
-
-  if (isPlaceholderEmail(payer.email)) {
-    throw new HttpError(400, "O e-mail do pagador está usando um valor genérico. Informe um e-mail real.");
-  }
-
-  if (environment === "production" && isTestUserEmail(payer.email)) {
-    throw new HttpError(
-      400,
-      "Você está usando credenciais de produção com um usuário de teste do Mercado Pago.",
-    );
   }
 
   if (!payer.firstName) {
@@ -497,13 +473,8 @@ function validatePayer(
     );
   }
 
-  if (payer.cpf && !isValidCpf(payer.cpf)) {
-    throw new HttpError(
-      400,
-      environment === "production"
-        ? "CPF do pagador inválido. Use um CPF real no ambiente de produção."
-        : "CPF do pagador inválido.",
-    );
+  if (!isValidCpf(payer.cpf)) {
+    throw new HttpError(400, "CPF do pagador inválido.");
   }
 }
 
@@ -519,19 +490,14 @@ function validateCommonChargeFields(payload: Record<string, unknown>) {
   return { clientId, description, amount };
 }
 
-function getFriendlyMercadoPagoError(message: string, environment: MPEnvironment): string {
+function getFriendlyMercadoPagoError(message: string, _environment: MPEnvironment): string {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("invalid date of expiration")) {
     return "A data de expiração enviada ao Mercado Pago é inválida. Use uma data futura em ISO 8601 ou AAAA-MM-DD.";
   }
 
-  if (normalized.includes("unauthorized use of live credentials")) {
-    return environment === "production"
-      ? "As credenciais live do Mercado Pago só funcionam com dados reais do pagador. Revise e-mail, CPF e ambiente configurado."
-      : "As credenciais do Mercado Pago não correspondem ao ambiente configurado. Use somente chaves de teste em test e chaves live em production.";
-  }
-
+  // Pass through the real Mercado Pago error — do NOT replace with custom assumptions
   return message;
 }
 
