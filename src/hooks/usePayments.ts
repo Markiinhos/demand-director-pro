@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { PaymentCharge, CreatePixPayload, CreateBoletoPayload, CreateCardPayload } from "@/types/payments";
+import {
+  getMercadoPagoFrontendConfig,
+  validateMercadoPagoConfigAlignment,
+  type PaymentsBackendStatus,
+} from "@/lib/payments/config";
 
 async function invokePayments(path: string, method: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -41,9 +46,25 @@ async function invokePayments(path: string, method: string, body?: unknown) {
   return data;
 }
 
+async function fetchPaymentsConfigStatus() {
+  return invokePayments("config-status", "GET") as Promise<PaymentsBackendStatus>;
+}
+
 export function usePayments() {
   const { user } = useAuth();
   const qc = useQueryClient();
+
+  const ensurePaymentsSetup = async () => {
+    const frontendConfig = getMercadoPagoFrontendConfig();
+    const backendStatus = await qc.fetchQuery({
+      queryKey: ["payments_config_status"],
+      queryFn: fetchPaymentsConfigStatus,
+      staleTime: 60_000,
+    });
+
+    const configError = validateMercadoPagoConfigAlignment(frontendConfig, backendStatus);
+    if (configError) throw new Error(configError);
+  };
 
   const query = useQuery<PaymentCharge[]>({
     queryKey: ["payment_charges"],
@@ -52,19 +73,28 @@ export function usePayments() {
   });
 
   const createPix = useMutation({
-    mutationFn: (payload: CreatePixPayload) => invokePayments("create-pix", "POST", payload),
+    mutationFn: async (payload: CreatePixPayload) => {
+      await ensurePaymentsSetup();
+      return invokePayments("create-pix", "POST", payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payment_charges"] }); toast.success("Cobrança Pix criada"); },
     onError: (e: Error) => toast.error("Erro ao criar Pix: " + e.message),
   });
 
   const createBoleto = useMutation({
-    mutationFn: (payload: CreateBoletoPayload) => invokePayments("create-boleto", "POST", payload),
+    mutationFn: async (payload: CreateBoletoPayload) => {
+      await ensurePaymentsSetup();
+      return invokePayments("create-boleto", "POST", payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payment_charges"] }); toast.success("Boleto criado"); },
     onError: (e: Error) => toast.error("Erro ao criar boleto: " + e.message),
   });
 
   const createCard = useMutation({
-    mutationFn: (payload: CreateCardPayload) => invokePayments("create-card", "POST", payload),
+    mutationFn: async (payload: CreateCardPayload) => {
+      await ensurePaymentsSetup();
+      return invokePayments("create-card", "POST", payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payment_charges"] }); toast.success("Pagamento processado"); },
     onError: (e: Error) => toast.error("Erro no cartão: " + e.message),
   });

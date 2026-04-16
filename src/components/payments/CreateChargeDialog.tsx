@@ -10,6 +10,7 @@ import { useClients } from "@/hooks/useClients";
 import { Loader2, QrCode, FileText, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import type { PaymentMethod } from "@/types/payments";
+import { resolveChargePayer, validateChargeForm } from "@/lib/payments/validation";
 
 interface Props {
   open: boolean;
@@ -41,33 +42,21 @@ export function CreateChargeDialog({
     card_token: "",
     installments: "1",
   });
+  const selectedClient = clients.find((client) => client.id === form.client_id);
 
   const isPending = createPix.isPending || createBoleto.isPending || createCard.isPending;
 
   const handleSubmit = () => {
+    const validationError = validateChargeForm({ method, form, client: selectedClient });
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     const amount = Number(form.amount);
     const dueDate = form.due_date.trim();
     const cardToken = form.card_token.trim();
-
-    if (!form.client_id || !form.amount || !form.description) {
-      toast.error("Preencha cliente, valor e descrição.");
-      return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Informe um valor válido.");
-      return;
-    }
-
-    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      toast.error("Use uma data válida no formato AAAA-MM-DD.");
-      return;
-    }
-
-    if (method === "card" && !cardToken) {
-      toast.error("Informe o token do cartão antes de gerar a cobrança.");
-      return;
-    }
+    const payer = resolveChargePayer(form, selectedClient);
 
     const base = {
       client_id: form.client_id,
@@ -77,10 +66,10 @@ export function CreateChargeDialog({
       demand_id: defaultDemandId,
       financial_entry_id: defaultFinancialEntryId,
       due_date: dueDate || undefined,
-      payer_email: form.payer_email.trim() || undefined,
-      payer_cpf: form.payer_cpf.trim() || undefined,
-      payer_first_name: form.payer_first_name.trim() || undefined,
-      payer_last_name: form.payer_last_name.trim() || undefined,
+      payer_email: payer.email,
+      payer_cpf: payer.cpf,
+      payer_first_name: payer.firstName,
+      payer_last_name: payer.lastName,
     };
 
     const onSuccess = () => onOpenChange(false);
