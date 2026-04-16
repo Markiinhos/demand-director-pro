@@ -21,8 +21,23 @@ async function invokePayments(path: string, method: string, body?: unknown) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Erro na requisição");
+  const text = await res.text();
+  let data: unknown = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text || "Erro na requisição" };
+  }
+
+  if (!res.ok) {
+    const errorMessage = typeof data === "object" && data && "error" in data
+      ? String((data as { error: unknown }).error)
+      : text || "Erro na requisição";
+
+    throw new Error(errorMessage);
+  }
+
   return data;
 }
 
@@ -32,7 +47,7 @@ export function usePayments() {
 
   const query = useQuery<PaymentCharge[]>({
     queryKey: ["payment_charges"],
-    queryFn: () => invokePayments("", "GET"),
+    queryFn: () => invokePayments("", "GET") as Promise<PaymentCharge[]>,
     enabled: !!user,
   });
 
