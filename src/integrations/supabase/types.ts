@@ -499,6 +499,131 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_charges: {
+        Row: {
+          amount: number
+          bank_slip_url: string | null
+          budget_id: string | null
+          card_last4: string | null
+          client_id: string
+          created_at: string
+          demand_id: string | null
+          description: string | null
+          due_date: string | null
+          external_reference: string | null
+          financial_entry_id: string | null
+          id: string
+          invoice_url: string | null
+          metadata: Json
+          paid_at: string | null
+          payment_link: string | null
+          payment_method: string
+          pix_copy_paste: string | null
+          pix_qr_code: string | null
+          provider: string
+          provider_charge_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bank_slip_url?: string | null
+          budget_id?: string | null
+          card_last4?: string | null
+          client_id: string
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          external_reference?: string | null
+          financial_entry_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json
+          paid_at?: string | null
+          payment_link?: string | null
+          payment_method: string
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
+          provider?: string
+          provider_charge_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bank_slip_url?: string | null
+          budget_id?: string | null
+          card_last4?: string | null
+          client_id?: string
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          external_reference?: string | null
+          financial_entry_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json
+          paid_at?: string | null
+          payment_link?: string | null
+          payment_method?: string
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
+          provider?: string
+          provider_charge_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payment_events: {
+        Row: {
+          charge_id: string | null
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed: boolean
+          provider: string
+          user_id: string | null
+        }
+        Insert: {
+          charge_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          processed?: boolean
+          provider?: string
+          user_id?: string | null
+        }
+        Update: {
+          charge_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          provider?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "payment_charges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
