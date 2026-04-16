@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePayments } from "@/hooks/usePayments";
 import { useClients } from "@/hooks/useClients";
 import { Loader2, QrCode, FileText, CreditCard } from "lucide-react";
+import { toast } from "sonner";
 import type { PaymentMethod } from "@/types/payments";
 
 interface Props {
@@ -44,20 +45,42 @@ export function CreateChargeDialog({
   const isPending = createPix.isPending || createBoleto.isPending || createCard.isPending;
 
   const handleSubmit = () => {
-    if (!form.client_id || !form.amount || !form.description) return;
+    const amount = Number(form.amount);
+    const dueDate = form.due_date.trim();
+    const cardToken = form.card_token.trim();
+
+    if (!form.client_id || !form.amount || !form.description) {
+      toast.error("Preencha cliente, valor e descrição.");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      toast.error("Use uma data válida no formato AAAA-MM-DD.");
+      return;
+    }
+
+    if (method === "card" && !cardToken) {
+      toast.error("Informe o token do cartão antes de gerar a cobrança.");
+      return;
+    }
 
     const base = {
       client_id: form.client_id,
-      amount: Number(form.amount),
-      description: form.description,
+      amount,
+      description: form.description.trim(),
       budget_id: defaultBudgetId,
       demand_id: defaultDemandId,
       financial_entry_id: defaultFinancialEntryId,
-      due_date: form.due_date || undefined,
-      payer_email: form.payer_email || undefined,
-      payer_cpf: form.payer_cpf || undefined,
-      payer_first_name: form.payer_first_name || undefined,
-      payer_last_name: form.payer_last_name || undefined,
+      due_date: dueDate || undefined,
+      payer_email: form.payer_email.trim() || undefined,
+      payer_cpf: form.payer_cpf.trim() || undefined,
+      payer_first_name: form.payer_first_name.trim() || undefined,
+      payer_last_name: form.payer_last_name.trim() || undefined,
     };
 
     const onSuccess = () => onOpenChange(false);
@@ -67,7 +90,7 @@ export function CreateChargeDialog({
     } else if (method === "boleto") {
       createBoleto.mutate(base, { onSuccess });
     } else {
-      createCard.mutate({ ...base, token: form.card_token, installments: Number(form.installments) }, { onSuccess });
+      createCard.mutate({ ...base, token: cardToken, installments: Number(form.installments) }, { onSuccess });
     }
   };
 
