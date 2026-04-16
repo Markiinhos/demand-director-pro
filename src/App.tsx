@@ -16,6 +16,7 @@ import Prazos from "./pages/Prazos";
 import Financeiro from "./pages/Financeiro";
 import Orcamentos from "./pages/Orcamentos";
 import Calculadora from "./pages/Calculadora";
+import Cobrancas from "./pages/Cobrancas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
                       <Route path="/prazos" element={<Prazos />} />
                       <Route path="/financeiro" element={<Financeiro />} />
                       <Route path="/orcamentos" element={<Orcamentos />} />
+                      <Route path="/cobrancas" element={<Cobrancas />} />
                       <Route path="/calculadora" element={<Calculadora />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
