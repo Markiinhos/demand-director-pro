@@ -11,6 +11,7 @@ const BOLETO_DEFAULT_EXPIRATION_DAYS = 3;
 
 type MPEnvironment = "test" | "production";
 type SupabaseClient = ReturnType<typeof createClient>;
+type ChargeOperation = "pix" | "boleto" | "card";
 
 class HttpError extends Error {
   status: number;
@@ -103,44 +104,52 @@ function maskCredential(value?: string): string {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
+function getMPConfigStatus() {
+  const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
+  const environment = detectMPEnvironmentFromCredential(accessToken);
+  const issues: string[] = [];
+
+  if (!accessToken) {
+    issues.push("MERCADO_PAGO_ACCESS_TOKEN não configurado.");
+  } else if (environment === "unknown") {
+    issues.push("Não foi possível identificar se o access token do Mercado Pago é test ou production.");
+  }
+
+  return {
+    environment,
+    isReady: issues.length === 0,
+    issues,
+    accessTokenConfigured: Boolean(accessToken),
+    clientSecretConfigured: Boolean(safeTrim(Deno.env.get("MERCADO_PAGO_CLIENT_SECRET"))),
+  };
+}
+
 function getMPConfig() {
   const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const publicKey = safeTrim(Deno.env.get("MERCADO_PAGO_PUBLIC_KEY"));
   const explicitEnvironment = safeTrim(Deno.env.get("MERCADO_PAGO_ENVIRONMENT"))?.toLowerCase();
+  const status = getMPConfigStatus();
 
   if (!accessToken) throw new HttpError(500, "MERCADO_PAGO_ACCESS_TOKEN não configurado.");
-  if (!publicKey) throw new HttpError(500, "MERCADO_PAGO_PUBLIC_KEY não configurada.");
 
-  const accessTokenEnvironment = detectMPEnvironmentFromCredential(accessToken);
-  const publicKeyEnvironment = detectMPEnvironmentFromCredential(publicKey);
-
-  if (accessTokenEnvironment === "unknown") {
+  if (status.environment === "unknown") {
     throw new HttpError(500, "Não foi possível identificar se o access token do Mercado Pago é test ou production.");
-  }
-
-  if (publicKeyEnvironment === "unknown") {
-    throw new HttpError(500, "Não foi possível identificar se a public key do Mercado Pago é test ou production.");
-  }
-
-  if (accessTokenEnvironment !== publicKeyEnvironment) {
-    throw new HttpError(500, "As credenciais do Mercado Pago estão misturando ambientes entre backend e frontend.");
   }
 
   if (explicitEnvironment && explicitEnvironment !== "test" && explicitEnvironment !== "production") {
     throw new HttpError(500, "MERCADO_PAGO_ENVIRONMENT deve ser 'test' ou 'production'.");
   }
 
-  if (explicitEnvironment && explicitEnvironment !== accessTokenEnvironment) {
+  if (explicitEnvironment && explicitEnvironment !== status.environment) {
     throw new HttpError(
       500,
-      `MERCADO_PAGO_ENVIRONMENT=${explicitEnvironment} não corresponde às chaves configuradas (${accessTokenEnvironment}).`,
+      `MERCADO_PAGO_ENVIRONMENT=${explicitEnvironment} não corresponde às chaves configuradas (${status.environment}).`,
     );
   }
 
   return {
     accessToken,
-    publicKey,
-    environment: accessTokenEnvironment,
+    environment: status.environment,
+    clientSecretConfigured: status.clientSecretConfigured,
   };
 }
 
@@ -150,14 +159,114 @@ function getWebhookUrl(): string {
   return `${supabaseUrl}/functions/v1/payments/webhook`;
 }
 
-function logMPContext(context: string, environment: MPEnvironment, accessToken: string, publicKey: string) {
+function logMPContext(context: string, config: ReturnType<typeof getMPConfig>) {
   console.log(
     "[payments] mp-config",
     JSON.stringify({
       context,
+      environment: config.environment,
+      accessToken: maskCredential(config.accessToken),
+      clientSecretConfigured: config.clientSecretConfigured,
+    }),
+  );
+}
+
+function isValidEmail(value?: string): boolean {
+  if (!value) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function maskEmail(value?: string): string {
+  if (!value) return "missing";
+  const [local = "", domain = ""] = value.split("@");
+  if (!domain) return `${local.slice(0, 2)}***`;
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+
+function maskCpf(value?: string): string {
+  if (!value) return "missing";
+  return `${value.slice(0, 3)}***${value.slice(-2)}`;
+}
+
+function maskPersonName(value?: string): string {
+  if (!value) return "missing";
+  const normalized = value.trim();
+  if (!normalized) return "missing";
+  return `${normalized.slice(0, 1)}***`;
+}
+
+function sanitizeMercadoPagoPayload(payload: unknown) {
+  if (!isObject(payload)) return payload;
+
+  const payer = isObject(payload.payer) ? payload.payer : null;
+  const identification = payer && isObject(payer.identification) ? payer.identification : null;
+
+  return {
+    transaction_amount: payload.transaction_amount ?? null,
+    description_present: Boolean(safeTrim(payload.description)),
+    payment_method_id: payload.payment_method_id ?? null,
+    external_reference: payload.external_reference ?? null,
+    notification_url: payload.notification_url ?? null,
+    date_of_expiration: payload.date_of_expiration ?? null,
+    installments: payload.installments ?? null,
+    payer: payer
+      ? {
+          email: typeof payer.email === "string" ? maskEmail(payer.email) : "missing",
+          first_name: typeof payer.first_name === "string" ? maskPersonName(payer.first_name) : "missing",
+          last_name: typeof payer.last_name === "string" ? maskPersonName(payer.last_name) : "missing",
+          identification: identification
+            ? {
+                type: identification.type ?? null,
+                number: typeof identification.number === "string" ? maskCpf(identification.number) : "missing",
+              }
+            : null,
+        }
+      : null,
+  };
+}
+
+function sanitizeMercadoPagoResponse(payload: unknown) {
+  if (!isObject(payload)) return payload;
+
+  const transactionDetails = isObject(payload.transaction_details) ? payload.transaction_details : null;
+  const pointOfInteraction = isObject(payload.point_of_interaction) ? payload.point_of_interaction : null;
+  const transactionData = pointOfInteraction && isObject(pointOfInteraction.transaction_data)
+    ? pointOfInteraction.transaction_data
+    : null;
+
+  return {
+    id: payload.id ?? null,
+    status: payload.status ?? null,
+    status_detail: payload.status_detail ?? null,
+    payment_method_id: payload.payment_method_id ?? null,
+    external_reference: payload.external_reference ?? null,
+    date_of_expiration: payload.date_of_expiration ?? null,
+    transaction_amount: payload.transaction_amount ?? null,
+    has_boleto_url: Boolean(transactionDetails?.external_resource_url),
+    has_pix_qr_code: Boolean(transactionData?.qr_code),
+    has_pix_qr_image: Boolean(transactionData?.qr_code_base64),
+  };
+}
+
+function logValidationResult(
+  operation: ChargeOperation,
+  environment: MPEnvironment,
+  status: "passed" | "failed",
+  payer: { email?: string; firstName?: string; lastName?: string; cpf?: string },
+  error?: string,
+) {
+  console.log(
+    `[payments] validation-${status}`,
+    JSON.stringify({
+      operation,
       environment,
-      accessToken: maskCredential(accessToken),
-      publicKey: maskCredential(publicKey),
+      payer: {
+        email: maskEmail(payer.email),
+        first_name: maskPersonName(payer.firstName),
+        last_name: maskPersonName(payer.lastName),
+        cpf: maskCpf(payer.cpf),
+      },
+      error: error ?? null,
     }),
   );
 }
@@ -345,6 +454,7 @@ async function resolvePayer(supabase: SupabaseClient, clientId: string, payload:
 function validatePayer(
   payer: { email?: string; firstName?: string; lastName?: string; cpf?: string },
   environment: MPEnvironment,
+  operation: ChargeOperation,
 ) {
   if (!payer.email) {
     throw new HttpError(
@@ -353,6 +463,10 @@ function validatePayer(
         ? "Informe um e-mail real do cliente para cobranças em produção."
         : "Informe o e-mail do pagador.",
     );
+  }
+
+  if (!isValidEmail(payer.email)) {
+    throw new HttpError(400, "E-mail do pagador inválido.");
   }
 
   if (isPlaceholderEmail(payer.email)) {
@@ -370,6 +484,19 @@ function validatePayer(
     throw new HttpError(400, "Informe o nome do pagador.");
   }
 
+  if (!payer.lastName) {
+    throw new HttpError(400, "Informe o sobrenome do pagador.");
+  }
+
+  if (!payer.cpf) {
+    throw new HttpError(
+      400,
+      operation === "card"
+        ? "Informe o CPF do titular do cartão."
+        : "Informe o CPF do pagador.",
+    );
+  }
+
   if (payer.cpf && !isValidCpf(payer.cpf)) {
     throw new HttpError(
       400,
@@ -385,8 +512,8 @@ function validateCommonChargeFields(payload: Record<string, unknown>) {
   const description = safeTrim(payload.description);
   const amount = Number(payload.amount);
 
-  if (!clientId || !description || !Number.isFinite(amount) || amount <= 0) {
-    throw new HttpError(400, "client_id, amount e description são obrigatórios, e amount deve ser maior que zero.");
+  if (!clientId || !description || !Number.isFinite(amount) || amount < 1) {
+    throw new HttpError(400, "client_id, amount e description são obrigatórios, e amount deve ser de pelo menos R$ 1,00.");
   }
 
   return { clientId, description, amount };
@@ -415,12 +542,32 @@ async function mpFetch(
   context?: Record<string, unknown>,
 ) {
   const method = (options.method || "GET").toUpperCase();
+  const requestPayload = typeof options.body === "string"
+    ? (() => {
+        try {
+          return JSON.parse(options.body);
+        } catch {
+          return options.body;
+        }
+      })()
+    : options.body;
   const headers = {
     Authorization: `Bearer ${config.accessToken}`,
     "Content-Type": "application/json",
     ...(method === "GET" ? {} : { "X-Idempotency-Key": crypto.randomUUID() }),
     ...(options.headers || {}),
   };
+
+  console.log(
+    "[payments] mercado-pago-request",
+    JSON.stringify({
+      path,
+      method,
+      environment: config.environment,
+      context,
+      payload: sanitizeMercadoPagoPayload(requestPayload),
+    }),
+  );
 
   const res = await fetch(`${MP_API}${path}`, {
     ...options,
@@ -451,14 +598,30 @@ async function mpFetch(
         status: res.status,
         environment: config.environment,
         context,
-        response: data,
+        response: sanitizeMercadoPagoResponse(data),
       }),
     );
 
     throw new HttpError(res.status >= 500 ? 502 : 400, getFriendlyMercadoPagoError(message, config.environment));
   }
 
+  console.log(
+    "[payments] mercado-pago-response",
+    JSON.stringify({
+      path,
+      method,
+      environment: config.environment,
+      context,
+      response: sanitizeMercadoPagoResponse(data),
+    }),
+  );
+
   return data;
+}
+
+async function getConfigStatus(req: Request): Promise<Response> {
+  await getAuthenticatedUser(req);
+  return jsonResponse(getMPConfigStatus());
 }
 
 async function parseRequestBody(req: Request): Promise<Record<string, unknown>> {
@@ -479,11 +642,17 @@ async function createPix(req: Request): Promise<Response> {
   const body = await parseRequestBody(req);
   const { clientId, description, amount } = validateCommonChargeFields(body);
   const config = getMPConfig();
-  logMPContext("create-pix", config.environment, config.accessToken, config.publicKey);
+  logMPContext("create-pix", config);
 
   const { dueDate, expirationDate } = buildPixExpirationDate(body.due_date);
   const payer = await resolvePayer(supabase, clientId, body);
-  validatePayer(payer, config.environment);
+  try {
+    validatePayer(payer, config.environment, "pix");
+    logValidationResult("pix", config.environment, "passed", payer);
+  } catch (error) {
+    logValidationResult("pix", config.environment, "failed", payer, getErrorMessage(error));
+    throw error;
+  }
 
   const externalRef = generateExternalRef();
   const mpData = await mpFetch(
@@ -547,11 +716,17 @@ async function createBoleto(req: Request): Promise<Response> {
   const body = await parseRequestBody(req);
   const { clientId, description, amount } = validateCommonChargeFields(body);
   const config = getMPConfig();
-  logMPContext("create-boleto", config.environment, config.accessToken, config.publicKey);
+  logMPContext("create-boleto", config);
 
   const { dueDate, expirationDate } = buildBoletoDates(body.due_date);
   const payer = await resolvePayer(supabase, clientId, body);
-  validatePayer(payer, config.environment);
+  try {
+    validatePayer(payer, config.environment, "boleto");
+    logValidationResult("boleto", config.environment, "passed", payer);
+  } catch (error) {
+    logValidationResult("boleto", config.environment, "failed", payer, getErrorMessage(error));
+    throw error;
+  }
 
   const externalRef = generateExternalRef();
   const mpData = await mpFetch(
@@ -621,10 +796,16 @@ async function createCard(req: Request): Promise<Response> {
   }
 
   const config = getMPConfig();
-  logMPContext("create-card", config.environment, config.accessToken, config.publicKey);
+  logMPContext("create-card", config);
 
   const payer = await resolvePayer(supabase, clientId, body);
-  validatePayer(payer, config.environment);
+  try {
+    validatePayer(payer, config.environment, "card");
+    logValidationResult("card", config.environment, "passed", payer);
+  } catch (error) {
+    logValidationResult("card", config.environment, "failed", payer, getErrorMessage(error));
+    throw error;
+  }
 
   const externalRef = generateExternalRef();
   const mpData = await mpFetch(
@@ -848,6 +1029,7 @@ Deno.serve(async (req) => {
       return await handleWebhook(req);
     }
 
+    if (path === "config-status" && req.method === "GET") return await getConfigStatus(req);
     if (path === "create-pix" && req.method === "POST") return await createPix(req);
     if (path === "create-boleto" && req.method === "POST") return await createBoleto(req);
     if (path === "create-card" && req.method === "POST") return await createCard(req);
