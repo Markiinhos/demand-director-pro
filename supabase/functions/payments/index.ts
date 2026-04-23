@@ -1056,6 +1056,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Not found" }, 404);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : getErrorMessage(error) === "Unauthorized" ? 401 : 500;
+    if (error instanceof HttpError && error.payload) {
+      return jsonResponse({
+        error: error.payload.error ?? getErrorMessage(error),
+        message: error.payload.message ?? getErrorMessage(error),
+        detail: error.payload.detail ?? null,
+        status: error.payload.status ?? null,
+        status_detail: error.payload.status_detail ?? null,
+        code: error.payload.code ?? null,
+        cause: error.payload.cause ?? null,
+        http_status: error.payload.http_status ?? status,
+      }, status);
+    }
+
     return jsonResponse({ error: getErrorMessage(error) }, status);
   }
 });
