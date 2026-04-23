@@ -15,11 +15,13 @@ type ChargeOperation = "pix" | "boleto" | "card";
 
 class HttpError extends Error {
   status: number;
+  payload?: Record<string, unknown>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, payload?: Record<string, unknown>) {
     super(message);
     this.name = "HttpError";
     this.status = status;
+    this.payload = payload;
   }
 }
 
@@ -245,6 +247,48 @@ function sanitizeMercadoPagoResponse(payload: unknown) {
     has_boleto_url: Boolean(transactionDetails?.external_resource_url),
     has_pix_qr_code: Boolean(transactionData?.qr_code),
     has_pix_qr_image: Boolean(transactionData?.qr_code_base64),
+  };
+}
+
+function getMercadoPagoPrimaryCause(payload: Record<string, unknown> | null) {
+  if (!Array.isArray(payload?.cause) || !isObject(payload.cause[0])) return null;
+  return payload.cause[0];
+}
+
+function buildMercadoPagoErrorPayload(
+  payload: Record<string, unknown> | null,
+  rawText: string,
+  httpStatus: number,
+) {
+  const primaryCause = getMercadoPagoPrimaryCause(payload);
+  const message = typeof payload?.message === "string"
+    ? payload.message
+    : typeof primaryCause?.description === "string"
+      ? primaryCause.description
+      : rawText || "Erro ao comunicar com o Mercado Pago.";
+
+  return {
+    error: typeof payload?.status_detail === "string"
+      ? payload.status_detail
+      : typeof payload?.error === "string"
+        ? payload.error
+        : message,
+    message,
+    detail: typeof primaryCause?.description === "string"
+      ? primaryCause.description
+      : typeof payload?.status_detail === "string"
+        ? payload.status_detail
+        : null,
+    status: payload?.status ?? null,
+    status_detail: typeof payload?.status_detail === "string" ? payload.status_detail : null,
+    code: typeof payload?.error === "string" || typeof payload?.error === "number"
+      ? payload.error
+      : typeof primaryCause?.code === "string" || typeof primaryCause?.code === "number"
+        ? primaryCause.code
+        : null,
+    cause: payload?.cause ?? null,
+    http_status: httpStatus,
+    api_response: payload ?? rawText,
   };
 }
 
@@ -490,14 +534,7 @@ function validateCommonChargeFields(payload: Record<string, unknown>) {
   return { clientId, description, amount };
 }
 
-function getFriendlyMercadoPagoError(message: string, _environment: MPEnvironment): string {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("invalid date of expiration")) {
-    return "A data de expiração enviada ao Mercado Pago é inválida. Use uma data futura em ISO 8601 ou AAAA-MM-DD.";
-  }
-
-  // Pass through the real Mercado Pago error — do NOT replace with custom assumptions
+function getFriendlyMercadoPagoError(message: string): string {
   return message;
 }
 
