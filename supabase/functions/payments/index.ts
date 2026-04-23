@@ -587,25 +587,34 @@ async function mpFetch(
   }
 
   if (!res.ok) {
-    const message = typeof data?.message === "string"
-      ? data.message
-      : Array.isArray(data?.cause) && typeof data.cause[0]?.description === "string"
-        ? data.cause[0].description
-        : rawText || "Erro ao comunicar com o Mercado Pago.";
+    const errorPayload = buildMercadoPagoErrorPayload(data, rawText, res.status);
 
     console.error(
-      "[payments] mercado-pago-error",
+      "[MP FULL ERROR]",
       JSON.stringify({
         path,
         method,
         status: res.status,
         environment: config.environment,
         context,
-        response: sanitizeMercadoPagoResponse(data),
+        request_payload: sanitizeMercadoPagoPayload(requestPayload),
+        response: data,
+        summarized_response: sanitizeMercadoPagoResponse(data),
+        extracted: {
+          status: errorPayload.status,
+          status_detail: errorPayload.status_detail,
+          message: errorPayload.message,
+          error: errorPayload.code,
+          cause: errorPayload.cause,
+        },
       }),
     );
 
-    throw new HttpError(res.status >= 500 ? 502 : 400, getFriendlyMercadoPagoError(message, config.environment));
+    throw new HttpError(
+      res.status >= 500 ? 502 : 400,
+      getFriendlyMercadoPagoError(errorPayload.message),
+      errorPayload,
+    );
   }
 
   console.log(
