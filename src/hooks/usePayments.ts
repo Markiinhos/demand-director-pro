@@ -9,6 +9,50 @@ import {
   type PaymentsBackendStatus,
 } from "@/lib/payments/config";
 
+class PaymentsRequestError extends Error {
+  status?: string | null;
+  statusDetail?: string | null;
+  code?: string | number | null;
+  detail?: string | null;
+  cause?: unknown;
+  httpStatus?: number | null;
+
+  constructor(message: string, init?: Partial<PaymentsRequestError>) {
+    super(message);
+    this.name = "PaymentsRequestError";
+    Object.assign(this, init);
+  }
+}
+
+function buildPaymentsError(data: unknown, fallbackMessage: string, httpStatus: number) {
+  if (typeof data === "object" && data) {
+    const payload = data as Record<string, unknown>;
+    const message = typeof payload.message === "string"
+      ? payload.message
+      : typeof payload.error === "string"
+        ? payload.error
+        : fallbackMessage;
+
+    const detail = typeof payload.detail === "string" ? payload.detail : null;
+    const statusDetail = typeof payload.status_detail === "string" ? payload.status_detail : null;
+    const code = typeof payload.code === "string" || typeof payload.code === "number" ? payload.code : null;
+    const formattedMessage = [message, detail, statusDetail && statusDetail !== detail ? `status_detail: ${statusDetail}` : null]
+      .filter(Boolean)
+      .join(" • ");
+
+    return new PaymentsRequestError(formattedMessage || fallbackMessage, {
+      status: typeof payload.status === "string" ? payload.status : null,
+      statusDetail,
+      code,
+      detail,
+      cause: payload.cause,
+      httpStatus: typeof payload.http_status === "number" ? payload.http_status : httpStatus,
+    });
+  }
+
+  return new PaymentsRequestError(fallbackMessage, { httpStatus: httpStatus });
+}
+
 async function invokePayments(path: string, method: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
@@ -36,11 +80,13 @@ async function invokePayments(path: string, method: string, body?: unknown) {
   }
 
   if (!res.ok) {
-    const errorMessage = typeof data === "object" && data && "error" in data
-      ? String((data as { error: unknown }).error)
-      : text || "Erro na requisição";
+    const errorMessage = typeof data === "object" && data && "message" in data
+      ? String((data as { message: unknown }).message)
+      : typeof data === "object" && data && "error" in data
+        ? String((data as { error: unknown }).error)
+        : text || "Erro na requisição";
 
-    throw new Error(errorMessage);
+    throw buildPaymentsError(data, errorMessage, res.status);
   }
 
   return data;
