@@ -1,4 +1,5 @@
 export type PaymentMethod = "pix" | "boleto" | "card";
+// "card" representa Link de Pagamento (Checkout Pro) — cliente paga com cartão/Pix/boleto no MP.
 
 export type PaymentStatus =
   | "pending"
@@ -49,10 +50,12 @@ export interface CreatePixPayload {
   demand_id?: string;
   financial_entry_id?: string;
   due_date?: string;
+  payer_type?: "PF" | "PJ";
   payer_email?: string;
   payer_first_name?: string;
   payer_last_name?: string;
-  payer_cpf?: string;
+  payer_company_name?: string;
+  payer_document?: string;
 }
 
 export interface CreateBoletoPayload {
@@ -63,24 +66,29 @@ export interface CreateBoletoPayload {
   demand_id?: string;
   financial_entry_id?: string;
   due_date?: string;
+  payer_type?: "PF" | "PJ";
   payer_email?: string;
   payer_first_name?: string;
   payer_last_name?: string;
-  payer_cpf?: string;
+  payer_company_name?: string;
+  payer_document?: string;
 }
 
-export interface CreateCardPayload {
+export interface CreatePaymentLinkPayload {
   client_id: string;
   amount: number;
   description: string;
   budget_id?: string;
   demand_id?: string;
   financial_entry_id?: string;
-  token: string;
+  expiration_days?: number;
   installments?: number;
+  payer_type?: "PF" | "PJ";
   payer_email?: string;
-  payer_cpf?: string;
-  payment_method_id?: string;
+  payer_first_name?: string;
+  payer_last_name?: string;
+  payer_company_name?: string;
+  payer_document?: string;
 }
 
 export const statusLabels: Record<PaymentStatus, string> = {
@@ -116,5 +124,5 @@ export const statusColors: Record<PaymentStatus, string> = {
 export const methodLabels: Record<PaymentMethod, string> = {
   pix: "Pix",
   boleto: "Boleto",
-  card: "Cartão",
+  card: "Link de Pagamento",
 };

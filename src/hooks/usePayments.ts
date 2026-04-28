@@ -2,10 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import type { PaymentCharge, CreatePixPayload, CreateBoletoPayload, CreateCardPayload } from "@/types/payments";
+import type {
+  PaymentCharge,
+  CreatePixPayload,
+  CreateBoletoPayload,
+  CreatePaymentLinkPayload,
+} from "@/types/payments";
 import {
-  getMercadoPagoFrontendConfig,
-  validateMercadoPagoConfigAlignment,
+  validateMercadoPagoBackendStatus,
   type PaymentsBackendStatus,
 } from "@/lib/payments/config";
 
@@ -32,14 +36,14 @@ function buildPaymentsError(data: unknown, fallbackMessage: string, httpStatus: 
       : typeof payload.error === "string"
         ? payload.error
         : fallbackMessage;
-
     const detail = typeof payload.detail === "string" ? payload.detail : null;
     const statusDetail = typeof payload.status_detail === "string" ? payload.status_detail : null;
     const code = typeof payload.code === "string" || typeof payload.code === "number" ? payload.code : null;
-    const formattedMessage = [message, detail, statusDetail && statusDetail !== detail ? `status_detail: ${statusDetail}` : null]
-      .filter(Boolean)
-      .join(" • ");
-
+    const formattedMessage = [
+      message,
+      detail,
+      statusDetail && statusDetail !== detail ? `status_detail: ${statusDetail}` : null,
+    ].filter(Boolean).join(" • ");
     return new PaymentsRequestError(formattedMessage || fallbackMessage, {
       status: typeof payload.status === "string" ? payload.status : null,
       statusDetail,
@@ -49,17 +53,14 @@ function buildPaymentsError(data: unknown, fallbackMessage: string, httpStatus: 
       httpStatus: typeof payload.http_status === "number" ? payload.http_status : httpStatus,
     });
   }
-
-  return new PaymentsRequestError(fallbackMessage, { httpStatus: httpStatus });
+  return new PaymentsRequestError(fallbackMessage, { httpStatus });
 }
 
 async function invokePayments(path: string, method: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
-
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const url = `https://${projectId}.supabase.co/functions/v1/payments/${path}`;
-
   const res = await fetch(url, {
     method,
     headers: {
@@ -69,26 +70,17 @@ async function invokePayments(path: string, method: string, body?: unknown) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-
   const text = await res.text();
   let data: unknown = null;
-
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { error: text || "Erro na requisição" };
-  }
-
+  try { data = text ? JSON.parse(text) : null; } catch { data = { error: text || "Erro na requisição" }; }
   if (!res.ok) {
-    const errorMessage = typeof data === "object" && data && "message" in data
+    const fallback = typeof data === "object" && data && "message" in data
       ? String((data as { message: unknown }).message)
       : typeof data === "object" && data && "error" in data
         ? String((data as { error: unknown }).error)
         : text || "Erro na requisição";
-
-    throw buildPaymentsError(data, errorMessage, res.status);
+    throw buildPaymentsError(data, fallback, res.status);
   }
-
   return data;
 }
 
@@ -101,15 +93,13 @@ export function usePayments() {
   const qc = useQueryClient();
 
   const ensurePaymentsSetup = async () => {
-    const frontendConfig = getMercadoPagoFrontendConfig();
     const backendStatus = await qc.fetchQuery({
       queryKey: ["payments_config_status"],
       queryFn: fetchPaymentsConfigStatus,
       staleTime: 60_000,
     });
-
-    const configError = validateMercadoPagoConfigAlignment(frontendConfig, backendStatus);
-    if (configError) throw new Error(configError);
+    const error = validateMercadoPagoBackendStatus(backendStatus);
+    if (error) throw new Error(error);
   };
 
   const query = useQuery<PaymentCharge[]>({
@@ -136,13 +126,13 @@ export function usePayments() {
     onError: (e: Error) => toast.error("Erro ao criar boleto: " + e.message),
   });
 
-  const createCard = useMutation({
-    mutationFn: async (payload: CreateCardPayload) => {
+  const createPaymentLink = useMutation({
+    mutationFn: async (payload: CreatePaymentLinkPayload) => {
       await ensurePaymentsSetup();
-      return invokePayments("create-card", "POST", payload);
+      return invokePayments("create-link", "POST", payload);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payment_charges"] }); toast.success("Pagamento processado"); },
-    onError: (e: Error) => toast.error("Erro no cartão: " + e.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payment_charges"] }); toast.success("Link de pagamento criado"); },
+    onError: (e: Error) => toast.error("Erro ao criar link: " + e.message),
   });
 
   const cancelCharge = useMutation({
@@ -156,7 +146,7 @@ export function usePayments() {
     isLoading: query.isLoading,
     createPix,
     createBoleto,
-    createCard,
+    createPaymentLink,
     cancelCharge,
   };
 }

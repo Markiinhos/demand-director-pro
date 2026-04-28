@@ -1,4 +1,5 @@
-import type { PaymentMethod } from "@/types/payments";
+export type DocumentType = "CPF" | "CNPJ";
+export type PayerType = "PF" | "PJ";
 
 type ChargeClient = {
   name?: string | null;
@@ -6,17 +7,17 @@ type ChargeClient = {
   contact_name?: string | null;
 };
 
-type ChargeFormValues = {
+export type ChargeFormValues = {
   client_id: string;
   amount: string;
   description: string;
   due_date: string;
+  payer_type: PayerType;
   payer_email: string;
-  payer_cpf: string;
+  payer_document: string;
   payer_first_name: string;
   payer_last_name: string;
-  card_token: string;
-  installments: string;
+  payer_company_name: string;
 };
 
 function safeTrim(value: unknown): string | undefined {
@@ -25,10 +26,9 @@ function safeTrim(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-export function sanitizeCpf(value: unknown): string | undefined {
+export function onlyDigits(value: unknown): string | undefined {
   const raw = safeTrim(value);
   if (!raw) return undefined;
-
   const digits = raw.replace(/\D/g, "");
   return digits || undefined;
 }
@@ -50,6 +50,46 @@ export function isValidCpf(value?: string): boolean {
   return remainder === Number(value[10]);
 }
 
+export function isValidCnpj(value?: string): boolean {
+  if (!value || value.length !== 14 || /^(\d)\1{13}$/.test(value)) return false;
+
+  const calc = (length: number) => {
+    const weights = length === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let sum = 0;
+    for (let i = 0; i < length; i += 1) sum += Number(value[i]) * weights[i];
+    const remainder = sum % 11;
+    return remainder < 2 ? 0 : 11 - remainder;
+  };
+
+  return calc(12) === Number(value[12]) && calc(13) === Number(value[13]);
+}
+
+export function detectDocumentType(digits?: string): DocumentType | null {
+  if (!digits) return null;
+  if (digits.length === 11) return "CPF";
+  if (digits.length === 14) return "CNPJ";
+  return null;
+}
+
+export function maskDocument(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 11) {
+    // CPF mask: 000.000.000-00
+    return d
+      .replace(/^(\d{3})(\d)/, "$1.$2")
+      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+  }
+  // CNPJ mask: 00.000.000/0000-00
+  return d
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+
 export function isValidEmail(value?: string): boolean {
   if (!value) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -69,21 +109,34 @@ export function splitFullName(fullName?: string) {
 export function resolveChargePayer(form: ChargeFormValues, client?: ChargeClient | null) {
   const fallbackName = safeTrim(client?.contact_name) ?? safeTrim(client?.name);
   const fallbackSplit = splitFullName(fallbackName);
+  const documentDigits = onlyDigits(form.payer_document);
+  const documentType: DocumentType =
+    form.payer_type === "PJ" ? "CNPJ" : "CPF";
 
   return {
+    type: form.payer_type,
     email: safeTrim(form.payer_email) ?? safeTrim(client?.email),
-    cpf: sanitizeCpf(form.payer_cpf),
-    firstName: safeTrim(form.payer_first_name) ?? fallbackSplit.firstName,
-    lastName: safeTrim(form.payer_last_name) ?? fallbackSplit.lastName,
+    document: documentDigits,
+    documentType,
+    firstName:
+      form.payer_type === "PJ"
+        ? safeTrim(form.payer_company_name) ?? safeTrim(client?.name)
+        : safeTrim(form.payer_first_name) ?? fallbackSplit.firstName,
+    lastName:
+      form.payer_type === "PJ"
+        ? "."
+        : safeTrim(form.payer_last_name) ?? fallbackSplit.lastName,
+    companyName:
+      form.payer_type === "PJ"
+        ? safeTrim(form.payer_company_name) ?? safeTrim(client?.name)
+        : undefined,
   };
 }
 
 export function validateChargeForm({
-  method,
   form,
   client,
 }: {
-  method: PaymentMethod;
   form: ChargeFormValues;
   client?: ChargeClient | null;
 }) {
@@ -106,13 +159,16 @@ export function validateChargeForm({
 
   if (!payer.email) return "Informe um e-mail válido do pagador.";
   if (!isValidEmail(payer.email)) return "E-mail do pagador inválido.";
-  if (!payer.firstName) return "Informe o nome do pagador.";
-  if (!payer.lastName) return "Informe o sobrenome do pagador.";
-  if (!payer.cpf) return "Informe o CPF do pagador.";
-  if (!isValidCpf(payer.cpf)) return "CPF do pagador inválido.";
 
-  if (method === "card" && !safeTrim(form.card_token)) {
-    return "Informe o token do cartão antes de gerar a cobrança.";
+  if (form.payer_type === "PJ") {
+    if (!safeTrim(form.payer_company_name)) return "Informe a razão social da empresa.";
+    if (!payer.document) return "Informe o CNPJ.";
+    if (!isValidCnpj(payer.document)) return "CNPJ inválido.";
+  } else {
+    if (!payer.firstName || payer.firstName.length < 2) return "Informe o nome do pagador (mín. 2 caracteres).";
+    if (!payer.lastName || payer.lastName.length < 2) return "Informe o sobrenome do pagador (mín. 2 caracteres).";
+    if (!payer.document) return "Informe o CPF do pagador.";
+    if (!isValidCpf(payer.document)) return "CPF inválido.";
   }
 
   return null;
