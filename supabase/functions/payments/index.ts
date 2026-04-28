@@ -701,14 +701,67 @@ async function cancelCharge(req: Request, id: string): Promise<Response> {
 async function handleWebhook(req: Request): Promise<Response> {
   const serviceClient = getServiceClient();
 
+  // ----- 1. Validar assinatura do Mercado Pago -----
+  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
+  if (!webhookSecret) {
+    console.error("[payments] webhook-not-configured", "Webhook do Mercado Pago não configurado");
+    return new Response(
+      JSON.stringify({ error: "Webhook do Mercado Pago não configurado" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const signatureHeader = req.headers.get("x-signature") ?? "";
+  const requestId = req.headers.get("x-request-id") ?? "";
+  const rawBody = await req.text();
+
+  const sigParts: Record<string, string> = {};
+  for (const part of signatureHeader.split(",")) {
+    const [k, v] = part.split("=").map((s) => s?.trim());
+    if (k && v) sigParts[k] = v;
+  }
+  const ts = sigParts.ts;
+  const v1 = sigParts.v1;
+
   let payload: Record<string, unknown>;
   try {
-    payload = await parseBody(req);
+    const parsed = JSON.parse(rawBody);
+    if (!isObject(parsed)) throw new Error("not-object");
+    payload = parsed;
   } catch {
     return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
   }
 
-  // Persist raw event first
+  const dataId = isObject(payload.data) && payload.data.id != null ? String(payload.data.id) : "";
+  if (!ts || !v1) {
+    console.error("[payments] webhook-invalid-signature", "missing x-signature ts/v1");
+    return new Response("Invalid signature", { status: 401, headers: corsHeaders });
+  }
+
+  try {
+    const template = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(webhookSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(template));
+    const computed = Array.from(new Uint8Array(sigBuf))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    if (computed !== v1) {
+      console.error("[payments] webhook-invalid-signature", "hmac mismatch");
+      return new Response("Invalid signature", { status: 401, headers: corsHeaders });
+    }
+  } catch (e) {
+    console.error("[payments] webhook-signature-error", getErrorMessage(e));
+    return new Response("Invalid signature", { status: 401, headers: corsHeaders });
+  }
+
+  // ----- 2. Persistir evento e processar -----
+  try {
   const { data: event } = await serviceClient
     .from("payment_events")
     .insert({
@@ -792,6 +845,10 @@ async function handleWebhook(req: Request): Promise<Response> {
   }
 
   return new Response("OK", { status: 200, headers: corsHeaders });
+  } catch (e) {
+    console.error("[payments] webhook-fatal", getErrorMessage(e));
+    return new Response("OK", { status: 200, headers: corsHeaders });
+  }
 }
 
 Deno.serve(async (req) => {
