@@ -6,6 +6,7 @@ export interface PaymentsBackendStatus {
   issues: string[];
   accessTokenConfigured: boolean;
   clientSecretConfigured: boolean;
+  webhookSecretConfigured?: boolean;
 }
 
 export function validateMercadoPagoBackendStatus(backend: PaymentsBackendStatus) {
