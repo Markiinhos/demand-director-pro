@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Copy, ExternalLink, XCircle } from "lucide-react";
+import { Copy, ExternalLink, XCircle, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePayments } from "@/hooks/usePayments";
 import { useClients } from "@/hooks/useClients";
@@ -27,6 +27,13 @@ export function ChargeDetailDialog({ charge, open, onOpenChange }: Props) {
     if (charge.pix_copy_paste) {
       navigator.clipboard.writeText(charge.pix_copy_paste);
       toast.success("Código Pix copiado!");
+    }
+  };
+
+  const copyLink = () => {
+    if (charge.payment_link) {
+      navigator.clipboard.writeText(charge.payment_link);
+      toast.success("Link copiado!");
     }
   };
 
@@ -79,6 +86,21 @@ export function ChargeDetailDialog({ charge, open, onOpenChange }: Props) {
               <Button variant="outline" onClick={() => window.open(charge.bank_slip_url!, "_blank")}>
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Abrir Boleto
               </Button>
+            </div>
+          )}
+
+          {/* Link de pagamento (Checkout Pro) */}
+          {charge.payment_method === "card" && charge.payment_link && (
+            <div className="space-y-2 p-4 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground break-all">{charge.payment_link}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={copyLink}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />Copiar link
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => window.open(charge.payment_link!, "_blank")}>
+                  <Link2 className="h-3.5 w-3.5 mr-1.5" />Abrir
+                </Button>
+              </div>
             </div>
           )}
 
