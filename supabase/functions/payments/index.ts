@@ -8,15 +8,16 @@ const corsHeaders = {
 const MP_API = "https://api.mercadopago.com";
 const PIX_DEFAULT_EXPIRATION_MS = 60 * 60 * 1000;
 const BOLETO_DEFAULT_EXPIRATION_DAYS = 3;
+const PREFERENCE_DEFAULT_EXPIRATION_DAYS = 7;
 
 type MPEnvironment = "test" | "production";
 type SupabaseClient = ReturnType<typeof createClient>;
-type ChargeOperation = "pix" | "boleto" | "card";
+type ChargeOperation = "pix" | "boleto" | "link";
+type DocumentType = "CPF" | "CNPJ";
 
 class HttpError extends Error {
   status: number;
   payload?: Record<string, unknown>;
-
   constructor(status: number, message: string, payload?: Record<string, unknown>) {
     super(message);
     this.name = "HttpError";
@@ -32,91 +33,103 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Erro interno ao processar a cobrança";
+function getErrorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : "Erro interno";
 }
 
-function safeTrim(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed || undefined;
+function safeTrim(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t || undefined;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
-function mapMPStatus(status: string): string {
-  const map: Record<string, string> = {
-    pending: "awaiting_payment",
-    approved: "approved",
-    authorized: "authorized",
-    in_process: "in_process",
-    in_mediation: "in_mediation",
-    rejected: "rejected",
-    cancelled: "canceled",
-    refunded: "refunded",
-    charged_back: "charged_back",
-    expired: "expired",
+function onlyDigits(v: unknown): string | undefined {
+  const t = safeTrim(v);
+  if (!t) return undefined;
+  const d = t.replace(/\D/g, "");
+  return d || undefined;
+}
+
+function isValidCpf(v?: string): boolean {
+  if (!v || v.length !== 11 || /^(\d)\1{10}$/.test(v)) return false;
+  let s = 0;
+  for (let i = 0; i < 9; i++) s += Number(v[i]) * (10 - i);
+  let r = (s * 10) % 11;
+  if (r === 10) r = 0;
+  if (r !== Number(v[9])) return false;
+  s = 0;
+  for (let i = 0; i < 10; i++) s += Number(v[i]) * (11 - i);
+  r = (s * 10) % 11;
+  if (r === 10) r = 0;
+  return r === Number(v[10]);
+}
+
+function isValidCnpj(v?: string): boolean {
+  if (!v || v.length !== 14 || /^(\d)\1{13}$/.test(v)) return false;
+  const calc = (len: number) => {
+    const w = len === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let s = 0;
+    for (let i = 0; i < len; i++) s += Number(v[i]) * w[i];
+    const r = s % 11;
+    return r < 2 ? 0 : 11 - r;
   };
-  return map[status] || "pending";
+  return calc(12) === Number(v[12]) && calc(13) === Number(v[13]);
 }
 
-function generateExternalRef(): string {
-  return `DSO-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+function isValidEmail(v?: string): boolean {
+  if (!v) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
-async function getAuthenticatedUser(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) throw new HttpError(401, "Unauthorized");
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-
-  const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims) throw new HttpError(401, "Unauthorized");
-
-  return { supabase, userId: data.claims.sub as string };
+function maskEmail(v?: string): string {
+  if (!v) return "missing";
+  const [l = "", d = ""] = v.split("@");
+  if (!d) return `${l.slice(0, 2)}***`;
+  return `${l.slice(0, 2)}***@${d}`;
 }
 
-function getServiceClient() {
-  return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+function maskDoc(v?: string): string {
+  if (!v) return "missing";
+  if (v.length === 11) return `***.***.***-${v.slice(-2)}`;
+  if (v.length === 14) return `**.***.***/${v.slice(8, 12)}-**`;
+  return `${v.slice(0, 2)}***${v.slice(-2)}`;
 }
 
-function detectMPEnvironmentFromCredential(value?: string): MPEnvironment | "unknown" {
-  const normalized = value?.trim().toUpperCase() ?? "";
+function maskName(v?: string): string {
+  if (!v) return "missing";
+  const t = v.trim();
+  return t ? `${t.slice(0, 1)}***` : "missing";
+}
 
-  if (!normalized) return "unknown";
-  if (normalized.startsWith("TEST-")) return "test";
-  if (normalized.startsWith("APP_USR-")) return "production";
+function maskCredential(v?: string): string {
+  if (!v) return "missing";
+  if (v.length <= 12) return `${v.slice(0, 4)}…`;
+  return `${v.slice(0, 8)}…${v.slice(-4)}`;
+}
 
+function detectEnv(v?: string): MPEnvironment | "unknown" {
+  const n = v?.trim().toUpperCase() ?? "";
+  if (!n) return "unknown";
+  if (n.startsWith("TEST-")) return "test";
+  if (n.startsWith("APP_USR-")) return "production";
   return "unknown";
-}
-
-function maskCredential(value?: string): string {
-  if (!value) return "missing";
-  if (value.length <= 12) return `${value.slice(0, 4)}…`;
-  return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
 function getMPConfigStatus() {
   const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const environment = detectMPEnvironmentFromCredential(accessToken);
+  const environment = detectEnv(accessToken);
   const issues: string[] = [];
-
   if (!accessToken) {
-    issues.push("MERCADO_PAGO_ACCESS_TOKEN não configurado.");
+    issues.push("Credenciais do Mercado Pago não configuradas (MERCADO_PAGO_ACCESS_TOKEN ausente).");
   } else if (environment === "unknown") {
-    issues.push("Não foi possível identificar se o access token do Mercado Pago é test ou production.");
+    issues.push("Não foi possível identificar se o token é test ou production.");
   }
-
   return {
     environment,
     isReady: issues.length === 0,
@@ -128,414 +141,207 @@ function getMPConfigStatus() {
 
 function getMPConfig() {
   const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const explicitEnvironment = safeTrim(Deno.env.get("MERCADO_PAGO_ENVIRONMENT"))?.toLowerCase();
   const status = getMPConfigStatus();
-
-  if (!accessToken) throw new HttpError(500, "MERCADO_PAGO_ACCESS_TOKEN não configurado.");
-
+  if (!accessToken) {
+    throw new HttpError(503, "Credenciais do Mercado Pago não configuradas. Adicione MERCADO_PAGO_ACCESS_TOKEN.");
+  }
   if (status.environment === "unknown") {
-    throw new HttpError(500, "Não foi possível identificar se o access token do Mercado Pago é test ou production.");
+    throw new HttpError(503, "Token do Mercado Pago inválido (esperado prefixo TEST- ou APP_USR-).");
   }
-
-  if (explicitEnvironment && explicitEnvironment !== "test" && explicitEnvironment !== "production") {
-    throw new HttpError(500, "MERCADO_PAGO_ENVIRONMENT deve ser 'test' ou 'production'.");
-  }
-
-  if (explicitEnvironment && explicitEnvironment !== status.environment) {
-    throw new HttpError(
-      500,
-      `MERCADO_PAGO_ENVIRONMENT=${explicitEnvironment} não corresponde às chaves configuradas (${status.environment}).`,
-    );
-  }
-
-  return {
-    accessToken,
-    environment: status.environment,
-    clientSecretConfigured: status.clientSecretConfigured,
-  };
+  return { accessToken, environment: status.environment };
 }
 
 function getWebhookUrl(): string {
-  const supabaseUrl = safeTrim(Deno.env.get("SUPABASE_URL"));
-  if (!supabaseUrl) throw new HttpError(500, "SUPABASE_URL não configurado.");
-  return `${supabaseUrl}/functions/v1/payments/webhook`;
+  const url = safeTrim(Deno.env.get("SUPABASE_URL"));
+  if (!url) throw new HttpError(500, "SUPABASE_URL não configurado.");
+  return `${url}/functions/v1/payments/webhook`;
 }
 
-function logMPContext(context: string, config: ReturnType<typeof getMPConfig>) {
-  console.log(
-    "[payments] mp-config",
-    JSON.stringify({
-      context,
-      environment: config.environment,
-      accessToken: maskCredential(config.accessToken),
-      clientSecretConfigured: config.clientSecretConfigured,
-    }),
+async function getAuthenticatedUser(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) throw new HttpError(401, "Unauthorized");
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const token = authHeader.replace("Bearer ", "");
+  const { data, error } = await supabase.auth.getClaims(token);
+  if (error || !data?.claims) throw new HttpError(401, "Unauthorized");
+  return { supabase, userId: data.claims.sub as string };
+}
+
+function getServiceClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 }
 
-function isValidEmail(value?: string): boolean {
-  if (!value) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function maskEmail(value?: string): string {
-  if (!value) return "missing";
-  const [local = "", domain = ""] = value.split("@");
-  if (!domain) return `${local.slice(0, 2)}***`;
-  return `${local.slice(0, 2)}***@${domain}`;
-}
-
-function maskCpf(value?: string): string {
-  if (!value) return "missing";
-  return `${value.slice(0, 3)}***${value.slice(-2)}`;
-}
-
-function maskPersonName(value?: string): string {
-  if (!value) return "missing";
-  const normalized = value.trim();
-  if (!normalized) return "missing";
-  return `${normalized.slice(0, 1)}***`;
-}
-
-function sanitizeMercadoPagoPayload(payload: unknown) {
-  if (!isObject(payload)) return payload;
-
-  const payer = isObject(payload.payer) ? payload.payer : null;
-  const identification = payer && isObject(payer.identification) ? payer.identification : null;
-
-  return {
-    transaction_amount: payload.transaction_amount ?? null,
-    description_present: Boolean(safeTrim(payload.description)),
-    payment_method_id: payload.payment_method_id ?? null,
-    external_reference: payload.external_reference ?? null,
-    notification_url: payload.notification_url ?? null,
-    date_of_expiration: payload.date_of_expiration ?? null,
-    installments: payload.installments ?? null,
-    payer: payer
-      ? {
-          email: typeof payer.email === "string" ? maskEmail(payer.email) : "missing",
-          first_name: typeof payer.first_name === "string" ? maskPersonName(payer.first_name) : "missing",
-          last_name: typeof payer.last_name === "string" ? maskPersonName(payer.last_name) : "missing",
-          identification: identification
-            ? {
-                type: identification.type ?? null,
-                number: typeof identification.number === "string" ? maskCpf(identification.number) : "missing",
-              }
-            : null,
-        }
-      : null,
+function mapMPStatus(s: string): string {
+  const m: Record<string, string> = {
+    pending: "awaiting_payment",
+    approved: "approved",
+    authorized: "authorized",
+    in_process: "in_process",
+    in_mediation: "in_mediation",
+    rejected: "rejected",
+    cancelled: "canceled",
+    refunded: "refunded",
+    charged_back: "charged_back",
+    expired: "expired",
   };
+  return m[s] || "pending";
 }
 
-function sanitizeMercadoPagoResponse(payload: unknown) {
-  if (!isObject(payload)) return payload;
-
-  const transactionDetails = isObject(payload.transaction_details) ? payload.transaction_details : null;
-  const pointOfInteraction = isObject(payload.point_of_interaction) ? payload.point_of_interaction : null;
-  const transactionData = pointOfInteraction && isObject(pointOfInteraction.transaction_data)
-    ? pointOfInteraction.transaction_data
-    : null;
-
-  return {
-    id: payload.id ?? null,
-    status: payload.status ?? null,
-    status_detail: payload.status_detail ?? null,
-    payment_method_id: payload.payment_method_id ?? null,
-    external_reference: payload.external_reference ?? null,
-    date_of_expiration: payload.date_of_expiration ?? null,
-    transaction_amount: payload.transaction_amount ?? null,
-    has_boleto_url: Boolean(transactionDetails?.external_resource_url),
-    has_pix_qr_code: Boolean(transactionData?.qr_code),
-    has_pix_qr_image: Boolean(transactionData?.qr_code_base64),
-  };
+function generateExternalRef(): string {
+  return `DSO-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
 
-function getMercadoPagoPrimaryCause(payload: Record<string, unknown> | null) {
-  if (!Array.isArray(payload?.cause) || !isObject(payload.cause[0])) return null;
-  return payload.cause[0];
-}
-
-function buildMercadoPagoErrorPayload(
-  payload: Record<string, unknown> | null,
-  rawText: string,
-  httpStatus: number,
-) {
-  const primaryCause = getMercadoPagoPrimaryCause(payload);
-  const message = typeof payload?.message === "string"
-    ? payload.message
-    : typeof primaryCause?.description === "string"
-      ? primaryCause.description
-      : rawText || "Erro ao comunicar com o Mercado Pago.";
-
-  return {
-    error: typeof payload?.status_detail === "string"
-      ? payload.status_detail
-      : typeof payload?.error === "string"
-        ? payload.error
-        : message,
-    message,
-    detail: typeof primaryCause?.description === "string"
-      ? primaryCause.description
-      : typeof payload?.status_detail === "string"
-        ? payload.status_detail
-        : null,
-    status: payload?.status ?? null,
-    status_detail: typeof payload?.status_detail === "string" ? payload.status_detail : null,
-    code: typeof payload?.error === "string" || typeof payload?.error === "number"
-      ? payload.error
-      : typeof primaryCause?.code === "string" || typeof primaryCause?.code === "number"
-        ? primaryCause.code
-        : null,
-    cause: payload?.cause ?? null,
-    http_status: httpStatus,
-    api_response: payload ?? rawText,
-  };
-}
-
-function logValidationResult(
-  operation: ChargeOperation,
-  environment: MPEnvironment,
-  status: "passed" | "failed",
-  payer: { email?: string; firstName?: string; lastName?: string; cpf?: string },
-  error?: string,
-) {
-  console.log(
-    `[payments] validation-${status}`,
-    JSON.stringify({
-      operation,
-      environment,
-      payer: {
-        email: maskEmail(payer.email),
-        first_name: maskPersonName(payer.firstName),
-        last_name: maskPersonName(payer.lastName),
-        cpf: maskCpf(payer.cpf),
-      },
-      error: error ?? null,
-    }),
-  );
-}
-
-function parseDateOnly(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) throw new HttpError(400, "Data de expiração inválida. Use AAAA-MM-DD ou ISO 8601.");
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    throw new HttpError(400, "Data de expiração inválida. Verifique o dia informado.");
+// ---------------- Date helpers ----------------
+function parseDateOnly(v: string) {
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) throw new HttpError(400, "Data inválida (use AAAA-MM-DD).");
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) {
+    throw new HttpError(400, "Data inválida.");
   }
-
-  return { year, month, day };
+  return { y, mo, d };
 }
 
-function dateOnlyToIso(value: string, endOfDay = false): string {
-  const { year, month, day } = parseDateOnly(value);
-  return new Date(
-    Date.UTC(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0),
-  ).toISOString();
+function dateOnlyToIso(v: string, eod = false): string {
+  const { y, mo, d } = parseDateOnly(v);
+  return new Date(Date.UTC(y, mo - 1, d, eod ? 23 : 0, eod ? 59 : 0, eod ? 59 : 0)).toISOString();
 }
 
-function normalizeDueDate(value: unknown): string | null {
-  const raw = safeTrim(value);
-  if (!raw) return null;
-
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
-    throw new HttpError(400, "Data de expiração inválida. Use AAAA-MM-DD ou ISO 8601.");
+function normalizeDueDate(v: unknown): string | null {
+  const r = safeTrim(v);
+  if (!r) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(r)) {
+    parseDateOnly(r);
+    return r;
   }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    parseDateOnly(raw);
-    return raw;
-  }
-
-  const parsed = Date.parse(raw);
-  if (Number.isNaN(parsed)) {
-    throw new HttpError(400, "Data de expiração inválida. Use AAAA-MM-DD ou ISO 8601.");
-  }
-
-  return new Date(parsed).toISOString().slice(0, 10);
+  const p = Date.parse(r);
+  if (Number.isNaN(p)) throw new HttpError(400, "Data de vencimento inválida.");
+  return new Date(p).toISOString().slice(0, 10);
 }
 
-function assertFutureExpiration(isoDate: string, message: string) {
-  const timestamp = Date.parse(isoDate);
-
-  if (Number.isNaN(timestamp)) {
-    throw new HttpError(400, "Data de expiração inválida. Não foi possível converter para ISO 8601.");
-  }
-
-  if (timestamp <= Date.now()) {
-    throw new HttpError(400, message);
-  }
+function getDefaultDateOnly(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function getDefaultDateOnly(daysFromNow: number): string {
-  return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
+// ---------------- Payer ----------------
+type ResolvedPayer = {
+  type: "PF" | "PJ";
+  email: string;
+  firstName: string;
+  lastName: string;
+  document: string;
+  documentType: DocumentType;
+};
 
-function buildPixExpirationDate(rawDueDate: unknown): { dueDate: string | null; expirationDate: string } {
-  const dueDate = normalizeDueDate(rawDueDate);
-  const expirationDate = dueDate
-    ? dateOnlyToIso(dueDate, true)
-    : new Date(Date.now() + PIX_DEFAULT_EXPIRATION_MS).toISOString();
-
-  assertFutureExpiration(expirationDate, "A data de expiração do Pix precisa estar no futuro.");
-
-  console.log(
-    "[payments] pix-expiration",
-    JSON.stringify({
-      raw_due_date: rawDueDate ?? null,
-      normalized_due_date: dueDate,
-      date_of_expiration: expirationDate,
-    }),
-  );
-
-  return { dueDate, expirationDate };
-}
-
-function buildBoletoDates(rawDueDate: unknown): { dueDate: string; expirationDate: string } {
-  const dueDate = normalizeDueDate(rawDueDate) ?? getDefaultDateOnly(BOLETO_DEFAULT_EXPIRATION_DAYS);
-  const expirationDate = dateOnlyToIso(dueDate, true);
-
-  assertFutureExpiration(expirationDate, "A data de vencimento do boleto precisa estar no futuro.");
-
-  console.log(
-    "[payments] boleto-expiration",
-    JSON.stringify({
-      raw_due_date: rawDueDate ?? null,
-      normalized_due_date: dueDate,
-      date_of_expiration: expirationDate,
-    }),
-  );
-
-  return { dueDate, expirationDate };
-}
-
-function sanitizeCpf(value: unknown): string | undefined {
-  const raw = safeTrim(value);
-  if (!raw) return undefined;
-
-  const digits = raw.replace(/\D/g, "");
-  return digits || undefined;
-}
-
-function isValidCpf(value?: string): boolean {
-  if (!value || value.length !== 11 || /^(\d)\1{10}$/.test(value)) return false;
-
-  let sum = 0;
-  for (let i = 0; i < 9; i += 1) sum += Number(value[i]) * (10 - i);
-  let remainder = (sum * 10) % 11;
-  if (remainder === 10) remainder = 0;
-  if (remainder !== Number(value[9])) return false;
-
-  sum = 0;
-  for (let i = 0; i < 10; i += 1) sum += Number(value[i]) * (11 - i);
-  remainder = (sum * 10) % 11;
-  if (remainder === 10) remainder = 0;
-
-  return remainder === Number(value[10]);
-}
-
-// Removed isPlaceholderEmail and isTestUserEmail — they were incorrectly blocking real payer data
-
-function splitFullName(fullName?: string) {
-  const normalized = safeTrim(fullName);
-  if (!normalized) return { firstName: undefined, lastName: undefined };
-
-  const parts = normalized.split(/\s+/).filter(Boolean);
-  return {
-    firstName: parts[0],
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
-  };
-}
-
-async function resolvePayer(supabase: SupabaseClient, clientId: string, payload: Record<string, unknown>) {
-  const hasEmail = Boolean(safeTrim(payload.payer_email));
-  const hasFirstName = Boolean(safeTrim(payload.payer_first_name));
-  const hasLastName = Boolean(safeTrim(payload.payer_last_name));
+async function resolvePayer(
+  supabase: SupabaseClient,
+  clientId: string,
+  body: Record<string, unknown>,
+): Promise<ResolvedPayer> {
+  const payerType = (safeTrim(body.payer_type) as "PF" | "PJ" | undefined) ?? "PF";
 
   let client: { name?: string | null; email?: string | null; contact_name?: string | null } | null = null;
+  const needsClient =
+    !safeTrim(body.payer_email) ||
+    (payerType === "PF" && (!safeTrim(body.payer_first_name) || !safeTrim(body.payer_last_name))) ||
+    (payerType === "PJ" && !safeTrim(body.payer_company_name));
 
-  if (!hasEmail || !hasFirstName || !hasLastName) {
+  if (needsClient) {
     const { data, error } = await supabase
       .from("clients")
       .select("name, email, contact_name")
       .eq("id", clientId)
       .single();
-
-    if (error) {
-      throw new HttpError(400, "Cliente não encontrado para preencher os dados do pagador.");
-    }
-
+    if (error) throw new HttpError(400, "Cliente não encontrado para preencher dados do pagador.");
     client = data;
   }
 
   const fallbackName = safeTrim(client?.contact_name) ?? safeTrim(client?.name);
-  const fallbackSplit = splitFullName(fallbackName);
+  const fallbackParts = fallbackName ? fallbackName.split(/\s+/) : [];
 
+  const email = safeTrim(body.payer_email) ?? safeTrim(client?.email) ?? "";
+  const document = onlyDigits(body.payer_document) ?? "";
+
+  let firstName = "";
+  let lastName = "";
+  let documentType: DocumentType;
+
+  if (payerType === "PJ") {
+    const company = safeTrim(body.payer_company_name) ?? safeTrim(client?.name) ?? "";
+    firstName = company;
+    lastName = ".";
+    documentType = "CNPJ";
+  } else {
+    firstName = safeTrim(body.payer_first_name) ?? fallbackParts[0] ?? "";
+    lastName =
+      safeTrim(body.payer_last_name) ??
+      (fallbackParts.length > 1 ? fallbackParts.slice(1).join(" ") : "");
+    documentType = "CPF";
+  }
+
+  return { type: payerType, email, firstName, lastName, document, documentType };
+}
+
+function validatePayer(payer: ResolvedPayer, op: ChargeOperation) {
+  if (!payer.email) throw new HttpError(400, "Informe o e-mail do pagador.");
+  if (!isValidEmail(payer.email)) throw new HttpError(400, "E-mail do pagador inválido.");
+
+  if (payer.type === "PJ") {
+    if (!payer.firstName || payer.firstName.length < 2) {
+      throw new HttpError(400, "Informe a razão social da empresa.");
+    }
+    if (!payer.document) throw new HttpError(400, "Informe o CNPJ.");
+    if (!isValidCnpj(payer.document)) throw new HttpError(400, "CNPJ inválido.");
+  } else {
+    if (!payer.firstName || payer.firstName.length < 2) {
+      throw new HttpError(400, "Informe o nome do pagador (mín. 2 caracteres).");
+    }
+    if (!payer.lastName || payer.lastName.length < 2) {
+      throw new HttpError(400, "Informe o sobrenome do pagador (mín. 2 caracteres).");
+    }
+    if (!payer.document) throw new HttpError(400, "Informe o CPF do pagador.");
+    if (!isValidCpf(payer.document)) throw new HttpError(400, "CPF inválido.");
+  }
+
+  console.log("[payments] payer-validated", JSON.stringify({
+    op,
+    type: payer.type,
+    email: maskEmail(payer.email),
+    name: maskName(payer.firstName),
+    document: maskDoc(payer.document),
+    documentType: payer.documentType,
+  }));
+}
+
+// ---------------- MP HTTP ----------------
+function buildMPErrorPayload(payload: Record<string, unknown> | null, raw: string, httpStatus: number) {
+  const cause = Array.isArray(payload?.cause) && isObject(payload.cause[0]) ? payload.cause[0] : null;
+  const message = typeof payload?.message === "string"
+    ? payload.message
+    : typeof cause?.description === "string"
+      ? cause.description
+      : raw || "Erro ao comunicar com o Mercado Pago.";
   return {
-    email: safeTrim(payload.payer_email) ?? safeTrim(client?.email),
-    firstName: safeTrim(payload.payer_first_name) ?? fallbackSplit.firstName,
-    lastName: safeTrim(payload.payer_last_name) ?? fallbackSplit.lastName ?? "",
-    cpf: sanitizeCpf(payload.payer_cpf),
+    error: typeof payload?.status_detail === "string" ? payload.status_detail
+      : typeof payload?.error === "string" ? payload.error : message,
+    message,
+    detail: typeof cause?.description === "string" ? cause.description
+      : typeof payload?.status_detail === "string" ? payload.status_detail : null,
+    status: payload?.status ?? null,
+    status_detail: typeof payload?.status_detail === "string" ? payload.status_detail : null,
+    code: typeof payload?.error === "string" || typeof payload?.error === "number" ? payload.error
+      : typeof cause?.code === "string" || typeof cause?.code === "number" ? cause.code : null,
+    cause: payload?.cause ?? null,
+    http_status: httpStatus,
   };
-}
-
-function validatePayer(
-  payer: { email?: string; firstName?: string; lastName?: string; cpf?: string },
-  _environment: MPEnvironment,
-  operation: ChargeOperation,
-) {
-  if (!payer.email) {
-    throw new HttpError(400, "Informe o e-mail do pagador.");
-  }
-
-  if (!isValidEmail(payer.email)) {
-    throw new HttpError(400, "E-mail do pagador inválido.");
-  }
-
-  if (!payer.firstName) {
-    throw new HttpError(400, "Informe o nome do pagador.");
-  }
-
-  if (!payer.lastName) {
-    throw new HttpError(400, "Informe o sobrenome do pagador.");
-  }
-
-  if (!payer.cpf) {
-    throw new HttpError(
-      400,
-      operation === "card"
-        ? "Informe o CPF do titular do cartão."
-        : "Informe o CPF do pagador.",
-    );
-  }
-
-  if (!isValidCpf(payer.cpf)) {
-    throw new HttpError(400, "CPF do pagador inválido.");
-  }
-}
-
-function validateCommonChargeFields(payload: Record<string, unknown>) {
-  const clientId = safeTrim(payload.client_id);
-  const description = safeTrim(payload.description);
-  const amount = Number(payload.amount);
-
-  if (!clientId || !description || !Number.isFinite(amount) || amount < 1) {
-    throw new HttpError(400, "client_id, amount e description são obrigatórios, e amount deve ser de pelo menos R$ 1,00.");
-  }
-
-  return { clientId, description, amount };
-}
-
-function getFriendlyMercadoPagoError(message: string): string {
-  return message;
 }
 
 async function mpFetch(
@@ -545,15 +351,6 @@ async function mpFetch(
   context?: Record<string, unknown>,
 ) {
   const method = (options.method || "GET").toUpperCase();
-  const requestPayload = typeof options.body === "string"
-    ? (() => {
-        try {
-          return JSON.parse(options.body);
-        } catch {
-          return options.body;
-        }
-      })()
-    : options.body;
   const headers = {
     Authorization: `Bearer ${config.accessToken}`,
     "Content-Type": "application/json",
@@ -561,134 +358,103 @@ async function mpFetch(
     ...(options.headers || {}),
   };
 
-  console.log(
-    "[payments] mercado-pago-request",
-    JSON.stringify({
-      path,
-      method,
-      environment: config.environment,
-      context,
-      payload: sanitizeMercadoPagoPayload(requestPayload),
-    }),
-  );
+  console.log("[payments] mp-request", JSON.stringify({
+    path,
+    method,
+    environment: config.environment,
+    token: maskCredential(config.accessToken),
+    context,
+  }));
 
-  const res = await fetch(`${MP_API}${path}`, {
-    ...options,
-    headers,
-  });
-
-  const rawText = await res.text();
+  const res = await fetch(`${MP_API}${path}`, { ...options, headers });
+  const raw = await res.text();
   let data: Record<string, unknown> | null = null;
-
-  try {
-    data = rawText ? JSON.parse(rawText) : null;
-  } catch {
-    data = rawText ? { raw: rawText } : null;
-  }
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = raw ? { raw } : null; }
 
   if (!res.ok) {
-    const errorPayload = buildMercadoPagoErrorPayload(data, rawText, res.status);
-
-    console.error(
-      "[MP FULL ERROR]",
-      JSON.stringify({
-        path,
-        method,
-        status: res.status,
-        environment: config.environment,
-        context,
-        request_payload: sanitizeMercadoPagoPayload(requestPayload),
-        response: data,
-        summarized_response: sanitizeMercadoPagoResponse(data),
-        extracted: {
-          status: errorPayload.status,
-          status_detail: errorPayload.status_detail,
-          message: errorPayload.message,
-          error: errorPayload.code,
-          cause: errorPayload.cause,
-        },
-      }),
-    );
-
-    throw new HttpError(
-      res.status >= 500 ? 502 : 400,
-      getFriendlyMercadoPagoError(errorPayload.message),
-      errorPayload,
-    );
+    const err = buildMPErrorPayload(data, raw, res.status);
+    console.error("[MP FULL ERROR]", JSON.stringify({
+      path, method, status: res.status, environment: config.environment, context,
+      response: data, extracted: err,
+    }));
+    throw new HttpError(res.status >= 500 ? 502 : 400, err.message, err);
   }
 
-  console.log(
-    "[payments] mercado-pago-response",
-    JSON.stringify({
-      path,
-      method,
-      environment: config.environment,
-      context,
-      response: sanitizeMercadoPagoResponse(data),
-    }),
-  );
-
+  console.log("[payments] mp-response", JSON.stringify({
+    path, method, environment: config.environment, context,
+    id: data?.id ?? null, status: data?.status ?? null,
+  }));
   return data;
 }
 
+// ---------------- Common validation ----------------
+function validateCommon(body: Record<string, unknown>) {
+  const clientId = safeTrim(body.client_id);
+  const description = safeTrim(body.description);
+  const amount = Number(body.amount);
+  if (!clientId || !description || !Number.isFinite(amount) || amount < 1) {
+    throw new HttpError(400, "client_id, description e amount (≥ R$ 1,00) são obrigatórios.");
+  }
+  return { clientId, description, amount };
+}
+
+function buildIdentification(payer: ResolvedPayer) {
+  return { type: payer.documentType, number: payer.document };
+}
+
+// ---------------- Routes ----------------
 async function getConfigStatus(req: Request): Promise<Response> {
   await getAuthenticatedUser(req);
   return jsonResponse(getMPConfigStatus());
 }
 
-async function parseRequestBody(req: Request): Promise<Record<string, unknown>> {
-  let body: unknown;
-
-  try {
-    body = await req.json();
-  } catch {
-    throw new HttpError(400, "JSON inválido na requisição.");
-  }
-
-  if (!isObject(body)) throw new HttpError(400, "Corpo da requisição inválido.");
-  return body;
+async function parseBody(req: Request): Promise<Record<string, unknown>> {
+  let b: unknown;
+  try { b = await req.json(); } catch { throw new HttpError(400, "JSON inválido."); }
+  if (!isObject(b)) throw new HttpError(400, "Corpo inválido.");
+  return b;
 }
 
 async function createPix(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
-  const body = await parseRequestBody(req);
-  const { clientId, description, amount } = validateCommonChargeFields(body);
+  const body = await parseBody(req);
+  const { clientId, description, amount } = validateCommon(body);
   const config = getMPConfig();
-  logMPContext("create-pix", config);
 
-  const { dueDate, expirationDate } = buildPixExpirationDate(body.due_date);
-  const payer = await resolvePayer(supabase, clientId, body);
-  try {
-    validatePayer(payer, config.environment, "pix");
-    logValidationResult("pix", config.environment, "passed", payer);
-  } catch (error) {
-    logValidationResult("pix", config.environment, "failed", payer, getErrorMessage(error));
-    throw error;
+  const dueDate = normalizeDueDate(body.due_date);
+  const expirationDate = dueDate
+    ? dateOnlyToIso(dueDate, true)
+    : new Date(Date.now() + PIX_DEFAULT_EXPIRATION_MS).toISOString();
+  if (Date.parse(expirationDate) <= Date.now()) {
+    throw new HttpError(400, "A data de expiração do Pix deve estar no futuro.");
   }
 
+  const payer = await resolvePayer(supabase, clientId, body);
+  validatePayer(payer, "pix");
+
   const externalRef = generateExternalRef();
-  const mpData = await mpFetch(
-    "/v1/payments",
-    config,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        transaction_amount: amount,
-        description,
-        payment_method_id: "pix",
-        external_reference: externalRef,
-        notification_url: getWebhookUrl(),
-        date_of_expiration: expirationDate,
-        payer: {
-          email: payer.email,
-          first_name: payer.firstName,
-          last_name: payer.lastName || undefined,
-          identification: payer.cpf ? { type: "CPF", number: payer.cpf } : undefined,
-        },
-      }),
-    },
-    { operation: "create-pix", external_reference: externalRef },
-  );
+  const mpData = await mpFetch("/v1/payments", config, {
+    method: "POST",
+    body: JSON.stringify({
+      transaction_amount: amount,
+      description,
+      payment_method_id: "pix",
+      external_reference: externalRef,
+      notification_url: getWebhookUrl(),
+      date_of_expiration: expirationDate,
+      payer: {
+        email: payer.email,
+        first_name: payer.firstName,
+        last_name: payer.lastName || undefined,
+        identification: buildIdentification(payer),
+      },
+    }),
+  }, { operation: "create-pix", external_reference: externalRef });
+
+  const txData = isObject(mpData?.point_of_interaction)
+    && isObject((mpData!.point_of_interaction as Record<string, unknown>).transaction_data)
+    ? (mpData!.point_of_interaction as Record<string, unknown>).transaction_data as Record<string, unknown>
+    : null;
 
   const charge = {
     user_id: userId,
@@ -703,70 +469,60 @@ async function createPix(req: Request): Promise<Response> {
     amount,
     description,
     due_date: dueDate,
-    pix_qr_code: typeof mpData?.point_of_interaction?.transaction_data?.qr_code_base64 === "string"
-      ? mpData.point_of_interaction.transaction_data.qr_code_base64
-      : null,
-    pix_copy_paste: typeof mpData?.point_of_interaction?.transaction_data?.qr_code === "string"
-      ? mpData.point_of_interaction.transaction_data.qr_code
-      : null,
+    pix_qr_code: typeof txData?.qr_code_base64 === "string" ? txData.qr_code_base64 : null,
+    pix_copy_paste: typeof txData?.qr_code === "string" ? txData.qr_code : null,
     external_reference: externalRef,
     metadata: {
       mp_response_id: mpData?.id,
       mp_environment: config.environment,
-      date_of_expiration: expirationDate,
+      payer_type: payer.type,
+      document_type: payer.documentType,
     },
   };
 
   const { data, error } = await supabase.from("payment_charges").insert(charge).select().single();
   if (error) throw error;
-
   return jsonResponse(data);
 }
 
 async function createBoleto(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
-  const body = await parseRequestBody(req);
-  const { clientId, description, amount } = validateCommonChargeFields(body);
+  const body = await parseBody(req);
+  const { clientId, description, amount } = validateCommon(body);
   const config = getMPConfig();
-  logMPContext("create-boleto", config);
 
-  const { dueDate, expirationDate } = buildBoletoDates(body.due_date);
-  const payer = await resolvePayer(supabase, clientId, body);
-  try {
-    validatePayer(payer, config.environment, "boleto");
-    logValidationResult("boleto", config.environment, "passed", payer);
-  } catch (error) {
-    logValidationResult("boleto", config.environment, "failed", payer, getErrorMessage(error));
-    throw error;
+  const dueDate = normalizeDueDate(body.due_date) ?? getDefaultDateOnly(BOLETO_DEFAULT_EXPIRATION_DAYS);
+  const expirationDate = dateOnlyToIso(dueDate, true);
+  if (Date.parse(expirationDate) <= Date.now()) {
+    throw new HttpError(400, "Vencimento do boleto deve estar no futuro.");
   }
 
-  const externalRef = generateExternalRef();
-  const mpData = await mpFetch(
-    "/v1/payments",
-    config,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        transaction_amount: amount,
-        description,
-        payment_method_id: "bolbradesco",
-        external_reference: externalRef,
-        notification_url: getWebhookUrl(),
-        date_of_expiration: expirationDate,
-        payer: {
-          email: payer.email,
-          first_name: payer.firstName,
-          last_name: payer.lastName || undefined,
-          identification: payer.cpf ? { type: "CPF", number: payer.cpf } : undefined,
-        },
-      }),
-    },
-    { operation: "create-boleto", external_reference: externalRef },
-  );
+  const payer = await resolvePayer(supabase, clientId, body);
+  validatePayer(payer, "boleto");
 
-  const externalResourceUrl = typeof mpData?.transaction_details?.external_resource_url === "string"
-    ? mpData.transaction_details.external_resource_url
+  const externalRef = generateExternalRef();
+  const mpData = await mpFetch("/v1/payments", config, {
+    method: "POST",
+    body: JSON.stringify({
+      transaction_amount: amount,
+      description,
+      payment_method_id: "bolbradesco",
+      external_reference: externalRef,
+      notification_url: getWebhookUrl(),
+      date_of_expiration: expirationDate,
+      payer: {
+        email: payer.email,
+        first_name: payer.firstName,
+        last_name: payer.lastName || undefined,
+        identification: buildIdentification(payer),
+      },
+    }),
+  }, { operation: "create-boleto", external_reference: externalRef });
+
+  const tx = isObject(mpData?.transaction_details)
+    ? (mpData!.transaction_details as Record<string, unknown>)
     : null;
+  const url = typeof tx?.external_resource_url === "string" ? tx.external_resource_url : null;
 
   const charge = {
     user_id: userId,
@@ -781,68 +537,82 @@ async function createBoleto(req: Request): Promise<Response> {
     amount,
     description,
     due_date: dueDate,
-    bank_slip_url: externalResourceUrl,
-    invoice_url: externalResourceUrl,
+    bank_slip_url: url,
+    invoice_url: url,
     external_reference: externalRef,
     metadata: {
       mp_response_id: mpData?.id,
       mp_environment: config.environment,
-      date_of_expiration: expirationDate,
+      payer_type: payer.type,
+      document_type: payer.documentType,
     },
   };
 
   const { data, error } = await supabase.from("payment_charges").insert(charge).select().single();
   if (error) throw error;
-
   return jsonResponse(data);
 }
 
-async function createCard(req: Request): Promise<Response> {
+// Checkout Pro link (cliente paga em ambiente do MP — cartão, pix, boleto)
+async function createPaymentLink(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
-  const body = await parseRequestBody(req);
-  const { clientId, description, amount } = validateCommonChargeFields(body);
-  const token = safeTrim(body.token);
-
-  if (!token) {
-    throw new HttpError(400, "client_id, amount, description e token são obrigatórios.");
-  }
-
+  const body = await parseBody(req);
+  const { clientId, description, amount } = validateCommon(body);
   const config = getMPConfig();
-  logMPContext("create-card", config);
+
+  const expirationDays = Number(body.expiration_days) > 0
+    ? Number(body.expiration_days)
+    : PREFERENCE_DEFAULT_EXPIRATION_DAYS;
+  const expirationDate = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString();
 
   const payer = await resolvePayer(supabase, clientId, body);
-  try {
-    validatePayer(payer, config.environment, "card");
-    logValidationResult("card", config.environment, "passed", payer);
-  } catch (error) {
-    logValidationResult("card", config.environment, "failed", payer, getErrorMessage(error));
-    throw error;
-  }
+  validatePayer(payer, "link");
 
   const externalRef = generateExternalRef();
-  const mpData = await mpFetch(
-    "/v1/payments",
-    config,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        transaction_amount: amount,
-        description,
-        token,
-        installments: Number(body.installments) || 1,
-        payment_method_id: safeTrim(body.payment_method_id) || undefined,
+  const installments = Number(body.installments);
+  const maxInstallments = Number.isFinite(installments) && installments > 0 && installments <= 12
+    ? Math.floor(installments)
+    : 12;
+
+  const mpData = await mpFetch("/checkout/preferences", config, {
+    method: "POST",
+    body: JSON.stringify({
+      items: [{
+        title: description,
+        quantity: 1,
+        currency_id: "BRL",
+        unit_price: amount,
+      }],
+      external_reference: externalRef,
+      notification_url: getWebhookUrl(),
+      expires: true,
+      expiration_date_to: expirationDate,
+      payment_methods: {
+        installments: maxInstallments,
+        excluded_payment_types: [],
+      },
+      payer: {
+        email: payer.email,
+        name: payer.firstName,
+        surname: payer.lastName || undefined,
+        identification: buildIdentification(payer),
+      },
+      metadata: {
         external_reference: externalRef,
-        notification_url: getWebhookUrl(),
-        payer: {
-          email: payer.email,
-          first_name: payer.firstName,
-          last_name: payer.lastName || undefined,
-          identification: payer.cpf ? { type: "CPF", number: payer.cpf } : undefined,
-        },
-      }),
-    },
-    { operation: "create-card", external_reference: externalRef },
-  );
+        payer_type: payer.type,
+      },
+    }),
+  }, { operation: "create-payment-link", external_reference: externalRef });
+
+  const initPoint = typeof mpData?.init_point === "string"
+    ? mpData.init_point
+    : typeof mpData?.sandbox_init_point === "string"
+      ? mpData.sandbox_init_point
+      : null;
+
+  if (!initPoint) {
+    throw new HttpError(502, "Mercado Pago não retornou init_point para a preferência.");
+  }
 
   const charge = {
     user_id: userId,
@@ -852,31 +622,26 @@ async function createCard(req: Request): Promise<Response> {
     financial_entry_id: safeTrim(body.financial_entry_id) || null,
     provider: "mercadopago",
     provider_charge_id: String(mpData?.id),
-    payment_method: "card",
-    status: mapMPStatus(String(mpData?.status || "pending")),
+    payment_method: "card", // Reaproveitamos a coluna existente — link de pagamento (Checkout Pro)
+    status: "awaiting_payment",
     amount,
     description,
-    card_last4: typeof mpData?.card?.last_four_digits === "string" ? mpData.card.last_four_digits : null,
-    paid_at: mpData?.status === "approved" ? new Date().toISOString() : null,
+    payment_link: initPoint,
+    invoice_url: initPoint,
     external_reference: externalRef,
     metadata: {
-      mp_response_id: mpData?.id,
+      mp_preference_id: mpData?.id,
       mp_environment: config.environment,
-      card_brand: mpData?.payment_method_id,
+      payer_type: payer.type,
+      document_type: payer.documentType,
+      max_installments: maxInstallments,
+      kind: "checkout_pro_link",
+      expires_at: expirationDate,
     },
   };
 
   const { data, error } = await supabase.from("payment_charges").insert(charge).select().single();
   if (error) throw error;
-
-  const financialEntryId = safeTrim(body.financial_entry_id);
-  if (mpData?.status === "approved" && financialEntryId) {
-    await supabase
-      .from("financial_entries")
-      .update({ status: "pago", paid_at: new Date().toISOString() })
-      .eq("id", financialEntryId);
-  }
-
   return jsonResponse(data);
 }
 
@@ -885,14 +650,11 @@ async function listCharges(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const status = url.searchParams.get("status");
   const method = url.searchParams.get("method");
-
-  let query = supabase.from("payment_charges").select("*").order("created_at", { ascending: false });
-  if (status) query = query.eq("status", status);
-  if (method) query = query.eq("payment_method", method);
-
-  const { data, error } = await query;
+  let q = supabase.from("payment_charges").select("*").order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  if (method) q = q.eq("payment_method", method);
+  const { data, error } = await q;
   if (error) throw error;
-
   return jsonResponse(data);
 }
 
@@ -906,22 +668,18 @@ async function getCharge(req: Request, id: string): Promise<Response> {
 async function cancelCharge(req: Request, id: string): Promise<Response> {
   const { supabase } = await getAuthenticatedUser(req);
   const config = getMPConfig();
-  const { data: charge, error: fetchErr } = await supabase.from("payment_charges").select("*").eq("id", id).single();
-  if (fetchErr) throw fetchErr;
+  const { data: charge, error: e1 } = await supabase.from("payment_charges").select("*").eq("id", id).single();
+  if (e1) throw e1;
 
-  if (charge.provider_charge_id) {
+  // Preferences (Checkout Pro) não podem ser canceladas via API; só Pix/Boleto.
+  if (charge.provider_charge_id && charge.payment_method !== "card") {
     try {
-      await mpFetch(
-        `/v1/payments/${charge.provider_charge_id}`,
-        config,
-        {
-          method: "PUT",
-          body: JSON.stringify({ status: "cancelled" }),
-        },
-        { operation: "cancel-charge", charge_id: id },
-      );
-    } catch (error) {
-      console.warn("[payments] cancel-warning", getErrorMessage(error));
+      await mpFetch(`/v1/payments/${charge.provider_charge_id}`, config, {
+        method: "PUT",
+        body: JSON.stringify({ status: "cancelled" }),
+      }, { operation: "cancel-charge", charge_id: id });
+    } catch (err) {
+      console.warn("[payments] cancel-warning", getErrorMessage(err));
     }
   }
 
@@ -931,25 +689,22 @@ async function cancelCharge(req: Request, id: string): Promise<Response> {
     .eq("id", id)
     .select()
     .single();
-
   if (error) throw error;
-
   return jsonResponse(data);
 }
 
 async function handleWebhook(req: Request): Promise<Response> {
   const serviceClient = getServiceClient();
-  const config = getMPConfig();
-  let eventId: string | null = null;
-  let payload: Record<string, unknown>;
 
+  let payload: Record<string, unknown>;
   try {
-    payload = await parseRequestBody(req);
+    payload = await parseBody(req);
   } catch {
     return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
   }
 
-  const { data: event, error: eventError } = await serviceClient
+  // Persist raw event first
+  const { data: event } = await serviceClient
     .from("payment_events")
     .insert({
       provider: "mercadopago",
@@ -958,36 +713,53 @@ async function handleWebhook(req: Request): Promise<Response> {
     })
     .select("id")
     .single();
+  const eventId = event?.id ?? null;
 
-  if (!eventError) eventId = event?.id ?? null;
+  // Only need credentials when there's a payment to fetch
+  let config: ReturnType<typeof getMPConfig> | null = null;
+  try {
+    config = getMPConfig();
+  } catch (e) {
+    console.error("[payments] webhook-no-config", getErrorMessage(e));
+    return new Response("OK", { status: 200, headers: corsHeaders });
+  }
 
   if (payload.type === "payment" && isObject(payload.data) && payload.data.id) {
     const paymentId = String(payload.data.id);
-
     try {
-      const mpPayment = await mpFetch(
-        `/v1/payments/${paymentId}`,
-        config,
-        {},
-        { operation: "webhook-fetch", payment_id: paymentId },
-      );
-      const newStatus = mapMPStatus(String(mpPayment?.status || "pending"));
+      const mpPayment = await mpFetch(`/v1/payments/${paymentId}`, config, {}, {
+        operation: "webhook-fetch", payment_id: paymentId,
+      });
 
-      const { data: charges, error: chargesError } = await serviceClient
+      const externalRef = typeof mpPayment?.external_reference === "string"
+        ? mpPayment.external_reference
+        : null;
+
+      // Match by provider_charge_id OR external_reference (covers Checkout Pro flow)
+      let chargeQuery = serviceClient.from("payment_charges").select("*").limit(1);
+      const { data: matchByMp } = await serviceClient
         .from("payment_charges")
         .select("*")
         .eq("provider_charge_id", paymentId)
         .limit(1);
 
-      if (chargesError) throw chargesError;
+      let charges = matchByMp ?? [];
+      if (charges.length === 0 && externalRef) {
+        const { data: matchByRef } = await serviceClient
+          .from("payment_charges")
+          .select("*")
+          .eq("external_reference", externalRef)
+          .limit(1);
+        charges = matchByRef ?? [];
+      }
 
-      if (charges && charges.length > 0) {
+      if (charges.length > 0) {
         const charge = charges[0];
+        const newStatus = mapMPStatus(String(mpPayment?.status || "pending"));
         const updateData: Record<string, unknown> = { status: newStatus };
 
         if (mpPayment?.status === "approved") {
           updateData.paid_at = new Date().toISOString();
-
           if (charge.financial_entry_id) {
             await serviceClient
               .from("financial_entries")
@@ -1001,26 +773,15 @@ async function handleWebhook(req: Request): Promise<Response> {
         if (eventId) {
           await serviceClient
             .from("payment_events")
-            .update({ processed: true, user_id: charge.user_id, charge_id: charge.id, error_message: null })
+            .update({ processed: true, user_id: charge.user_id, charge_id: charge.id })
             .eq("id", eventId);
         }
       }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      console.error("[payments] webhook-error", JSON.stringify({ payment_id: paymentId, error: errorMessage }));
-
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      console.error("[payments] webhook-error", JSON.stringify({ payment_id: paymentId, error: msg }));
       if (eventId) {
-        await serviceClient
-          .from("payment_events")
-          .update({ error_message: errorMessage })
-          .eq("id", eventId);
-      } else {
-        await serviceClient.from("payment_events").insert({
-          provider: "mercadopago",
-          event_type: "webhook_error",
-          payload,
-          error_message: errorMessage,
-        });
+        await serviceClient.from("payment_events").update({ error_message: msg }).eq("id", eventId);
       }
     }
   }
@@ -1037,14 +798,11 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const path = url.pathname.replace(/^\/payments\/?/, "").replace(/\/$/, "");
 
-    if (path === "webhook" && req.method === "POST") {
-      return await handleWebhook(req);
-    }
-
+    if (path === "webhook" && req.method === "POST") return await handleWebhook(req);
     if (path === "config-status" && req.method === "GET") return await getConfigStatus(req);
     if (path === "create-pix" && req.method === "POST") return await createPix(req);
     if (path === "create-boleto" && req.method === "POST") return await createBoleto(req);
-    if (path === "create-card" && req.method === "POST") return await createCard(req);
+    if (path === "create-link" && req.method === "POST") return await createPaymentLink(req);
     if (path === "" && req.method === "GET") return await listCharges(req);
 
     const idMatch = path.match(/^([a-f0-9-]+)$/);
@@ -1055,7 +813,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ error: "Not found" }, 404);
   } catch (error) {
-    const status = error instanceof HttpError ? error.status : getErrorMessage(error) === "Unauthorized" ? 401 : 500;
+    const status = error instanceof HttpError ? error.status : 500;
     if (error instanceof HttpError && error.payload) {
       return jsonResponse({
         error: error.payload.error ?? getErrorMessage(error),
@@ -1068,7 +826,6 @@ Deno.serve(async (req) => {
         http_status: error.payload.http_status ?? status,
       }, status);
     }
-
     return jsonResponse({ error: getErrorMessage(error) }, status);
   }
 });
