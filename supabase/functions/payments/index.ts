@@ -123,6 +123,7 @@ function detectEnv(v?: string): MPEnvironment | "unknown" {
 
 function getMPConfigStatus() {
   const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
+  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
   const environment = detectEnv(accessToken);
   const issues: string[] = [];
   if (!accessToken) {
@@ -130,12 +131,16 @@ function getMPConfigStatus() {
   } else if (environment === "unknown") {
     issues.push("Não foi possível identificar se o token é test ou production.");
   }
+  if (!webhookSecret) {
+    issues.push("Webhook do Mercado Pago não configurado (MERCADO_PAGO_WEBHOOK_SECRET ausente).");
+  }
   return {
     environment,
     isReady: issues.length === 0,
     issues,
     accessTokenConfigured: Boolean(accessToken),
     clientSecretConfigured: Boolean(safeTrim(Deno.env.get("MERCADO_PAGO_CLIENT_SECRET"))),
+    webhookSecretConfigured: Boolean(webhookSecret),
   };
 }
 
