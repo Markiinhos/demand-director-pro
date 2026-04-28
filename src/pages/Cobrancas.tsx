@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, QrCode, FileText, CreditCard } from "lucide-react";
+import { Plus, Search, Loader2, QrCode, FileText, Link2 } from "lucide-react";
 import type { PaymentCharge, PaymentMethod } from "@/types/payments";
 import { statusLabels, statusColors, methodLabels } from "@/types/payments";
 
-const methodIcons: Record<PaymentMethod, typeof QrCode> = { pix: QrCode, boleto: FileText, card: CreditCard };
+const methodIcons: Record<PaymentMethod, typeof QrCode> = { pix: QrCode, boleto: FileText, card: Link2 };
 
 export default function Cobrancas() {
   const { charges, isLoading } = usePayments();
@@ -42,7 +42,7 @@ export default function Cobrancas() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Cobranças</h1>
-          <p className="text-muted-foreground text-sm">Pix, boleto e cartão via Mercado Pago</p>
+          <p className="text-muted-foreground text-sm">Pix, boleto e link de pagamento via Mercado Pago</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1.5" />Nova Cobrança</Button>
       </div>
@@ -58,7 +58,7 @@ export default function Cobrancas() {
             <SelectItem value="all">Todos métodos</SelectItem>
             <SelectItem value="pix">Pix</SelectItem>
             <SelectItem value="boleto">Boleto</SelectItem>
-            <SelectItem value="card">Cartão</SelectItem>
+            <SelectItem value="card">Link</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
