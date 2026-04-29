@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { usePayments } from "@/hooks/usePayments";
 import { useClients } from "@/hooks/useClients";
 import { CreateChargeDialog } from "@/components/payments/CreateChargeDialog";
@@ -9,96 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, QrCode, FileText, Link2, ShieldCheck, ShieldAlert, Copy } from "lucide-react";
+import { Plus, Search, Loader2, QrCode, FileText, Link2 } from "lucide-react";
 import type { PaymentCharge, PaymentMethod } from "@/types/payments";
 import { statusLabels, statusColors, methodLabels } from "@/types/payments";
-import type { PaymentsBackendStatus } from "@/lib/payments/config";
-import { toast } from "sonner";
 
 const methodIcons: Record<PaymentMethod, typeof QrCode> = { pix: QrCode, boleto: FileText, card: Link2 };
-
-function PaymentsConfigBanner() {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/payments/webhook`;
-  const secretsUrl = `https://supabase.com/dashboard/project/${projectId}/settings/functions`;
-
-  const { data, isLoading } = useQuery<PaymentsBackendStatus>({
-    queryKey: ["payments_config_status"],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/payments/config-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token ?? ""}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        },
-      );
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-
-  if (isLoading || !data) return null;
-
-  const tokenOk = data.accessTokenConfigured && data.environment !== "unknown";
-  const webhookOk = !!data.webhookSecretConfigured;
-
-  return (
-    <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold">Status da integração Mercado Pago</h2>
-      </div>
-      <div className="grid sm:grid-cols-2 gap-2 text-sm">
-        <StatusRow ok={tokenOk} label={tokenOk ? `Access Token configurado (${data.environment})` : "Access Token não configurado"} />
-        <StatusRow ok={webhookOk} label={webhookOk ? "Webhook configurado" : "Webhook não configurado"} />
-      </div>
-      {!webhookOk && (
-        <div className="rounded-lg bg-muted/40 p-3 space-y-2 text-xs">
-          <p className="text-muted-foreground">
-            Para receber confirmações automáticas de pagamento, cadastre o webhook no painel do Mercado Pago e cole a chave secreta no campo seguro <code className="font-mono">MERCADO_PAGO_WEBHOOK_SECRET</code>.
-          </p>
-          <div className="flex items-center gap-2">
-            <Input readOnly value={webhookUrl} className="text-xs h-8 font-mono" />
-            <Button
-              size="sm"
-              variant="outline"
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(webhookUrl);
-                toast.success("URL copiada");
-              }}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <a
-            href={secretsUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary text-xs underline underline-offset-2"
-          >
-            Abrir painel de Secrets para colar a chave secreta →
-          </a>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatusRow({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      {ok ? (
-        <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-      ) : (
-        <ShieldAlert className="h-4 w-4 text-destructive shrink-0" />
-      )}
-      <span className={ok ? "text-foreground" : "text-destructive"}>{label}</span>
-    </div>
-  );
-}
 
 export default function Cobrancas() {
   const { charges, isLoading } = usePayments();
@@ -133,8 +46,6 @@ export default function Cobrancas() {
         </div>
         <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1.5" />Nova Cobrança</Button>
       </div>
-
-      <PaymentsConfigBanner />
 
       <div className="flex gap-3">
         <div className="relative flex-1">
