@@ -813,16 +813,85 @@ async function handleWebhook(req: Request): Promise<Response> {
 
       if (charges.length > 0) {
         const charge = charges[0];
-        const newStatus = mapMPStatus(String(mpPayment?.status || "pending"));
-        const updateData: Record<string, unknown> = { status: newStatus };
+        const mpStatus = String(mpPayment?.status || "pending");
+        const mpStatusDetail = String(mpPayment?.status_detail || "");
+        const isPaid = mpStatus === "approved" || mpStatusDetail === "accredited";
+        const newStatus = mapMPStatus(mpStatus);
+        const nowIso = new Date().toISOString();
 
-        if (mpPayment?.status === "approved") {
-          updateData.paid_at = new Date().toISOString();
-          if (charge.financial_entry_id) {
-            await serviceClient
-              .from("financial_entries")
-              .update({ status: "pago", paid_at: new Date().toISOString() })
-              .eq("id", charge.financial_entry_id);
+        const updateData: Record<string, unknown> = {
+          status: newStatus,
+          metadata: {
+            ...(typeof charge.metadata === "object" && charge.metadata ? charge.metadata : {}),
+            mp_last_status: mpStatus,
+            mp_status_detail: mpStatusDetail,
+            mp_last_webhook_at: nowIso,
+          },
+        };
+
+        if (isPaid) {
+          updateData.paid_at = charge.paid_at ?? nowIso;
+
+          // Idempotência: só mexe no financeiro se ainda não está marcado como pago
+          const alreadyPaid = charge.status === "approved" && charge.financial_entry_id;
+
+          if (!alreadyPaid) {
+            let financialEntryId = charge.financial_entry_id as string | null;
+
+            if (financialEntryId) {
+              // Atualiza lançamento existente
+              const { error: updErr } = await serviceClient
+                .from("financial_entries")
+                .update({
+                  status: "pago",
+                  paid_at: nowIso,
+                  amount: charge.amount,
+                  type: "entrada",
+                })
+                .eq("id", financialEntryId);
+              if (updErr) {
+                console.error("[payments] webhook-financial-update-error", updErr.message);
+              } else {
+                console.log("[payments] webhook-financial-updated", JSON.stringify({
+                  charge_id: charge.id, financial_entry_id: financialEntryId,
+                }));
+              }
+            } else {
+              // Cria lançamento financeiro automaticamente
+              const { data: created, error: insErr } = await serviceClient
+                .from("financial_entries")
+                .insert({
+                  user_id: charge.user_id,
+                  client_id: charge.client_id,
+                  demand_id: charge.demand_id,
+                  type: "entrada",
+                  category: "pagamento_mercado_pago",
+                  description:
+                    charge.description?.trim()
+                      ? `${charge.description} (Mercado Pago)`
+                      : "Pagamento recebido via Mercado Pago",
+                  amount: charge.amount,
+                  status: "pago",
+                  due_date: charge.due_date,
+                  paid_at: nowIso,
+                })
+                .select("id")
+                .single();
+
+              if (insErr) {
+                console.error("[payments] webhook-financial-insert-error", insErr.message);
+              } else if (created?.id) {
+                financialEntryId = created.id as string;
+                updateData.financial_entry_id = financialEntryId;
+                console.log("[payments] webhook-financial-created", JSON.stringify({
+                  charge_id: charge.id, financial_entry_id: financialEntryId,
+                }));
+              }
+            }
+          } else {
+            console.log("[payments] webhook-duplicate-ignored", JSON.stringify({
+              charge_id: charge.id, payment_id: paymentId,
+            }));
           }
         }
 
@@ -834,6 +903,10 @@ async function handleWebhook(req: Request): Promise<Response> {
             .update({ processed: true, user_id: charge.user_id, charge_id: charge.id })
             .eq("id", eventId);
         }
+      } else {
+        console.warn("[payments] webhook-charge-not-found", JSON.stringify({
+          payment_id: paymentId, external_reference: externalRef,
+        }));
       }
     } catch (err) {
       const msg = getErrorMessage(err);

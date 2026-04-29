@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -106,7 +107,34 @@ export function usePayments() {
     queryKey: ["payment_charges"],
     queryFn: () => invokePayments("", "GET") as Promise<PaymentCharge[]>,
     enabled: !!user,
+    // Enquanto houver cobranças aguardando pagamento, refaz a query para refletir
+    // confirmações vindas pelo webhook do Mercado Pago.
+    refetchInterval: (q) => {
+      const data = q.state.data as PaymentCharge[] | undefined;
+      const hasPending = data?.some((c) =>
+        ["pending", "awaiting_payment", "in_process", "authorized"].includes(c.status),
+      );
+      return hasPending ? 15_000 : false;
+    },
+    refetchOnWindowFocus: true,
   });
+
+  // Quando uma cobrança vira "approved", invalida o financeiro/dashboard
+  // para que receita, lucro e receitas recentes recalculem.
+  const lastApprovedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const charges = query.data ?? [];
+    let changed = false;
+    for (const c of charges) {
+      if (c.status === "approved" && !lastApprovedRef.current.has(c.id)) {
+        lastApprovedRef.current.add(c.id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      qc.invalidateQueries({ queryKey: ["financial_entries"] });
+    }
+  }, [query.data, qc]);
 
   const createPix = useMutation({
     mutationFn: async (payload: CreatePixPayload) => {
