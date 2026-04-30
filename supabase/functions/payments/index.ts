@@ -801,18 +801,49 @@ async function handleWebhook(req: Request): Promise<Response> {
     .single();
   const eventId = event?.id ?? null;
 
-  // Only need credentials when there's a payment to fetch
-  let config: ReturnType<typeof getMPConfig> | null = null;
-  try {
-    config = getMPConfig();
-  } catch (e) {
-    console.error("[payments] webhook-no-config", getErrorMessage(e));
-    return new Response("OK", { status: 200, headers: corsHeaders });
-  }
-
   if (payload.type === "payment" && isObject(payload.data) && payload.data.id) {
     const paymentId = String(payload.data.id);
     try {
+      // Localiza a cobrança ANTES de chamar a API do MP, para descobrir
+      // qual usuário (e portanto qual access_token) usar.
+      const { data: matchByMp } = await serviceClient
+        .from("payment_charges")
+        .select("*")
+        .eq("provider_charge_id", paymentId)
+        .limit(1);
+      let charges = matchByMp ?? [];
+
+      // Sem match direto: tentamos via metadata (Checkout Pro guarda mp_preference_id).
+      // Como não temos o external_reference ainda, faremos um lookup secundário
+      // depois de obter os dados do pagamento.
+      let charge = charges[0] ?? null;
+
+      // Se ainda não encontramos a cobrança pelo provider_charge_id, precisamos
+      // primeiro pegar o pagamento usando QUALQUER token configurado para
+      // descobrir o external_reference. Estratégia: tentamos um token de qualquer
+      // conexão recente — se falhar, registramos e saímos. Em produção, o webhook
+      // do MP sempre vem da conta do dono, então podemos tentar primeiro com a
+      // primeira conexão disponível como fallback de descoberta.
+      let config: MPUserConfig | null = null;
+      if (charge) {
+        try { config = await getUserMPConfig(charge.user_id as string); } catch (e) {
+          console.error("[payments] webhook-no-user-config", getErrorMessage(e));
+        }
+      } else {
+        // Sem cobrança ainda: tenta por external_reference depois de buscar via
+        // a primeira conexão disponível.
+        const { data: anyConn } = await serviceClient
+          .from("mp_connections").select("user_id").limit(1).maybeSingle();
+        if (anyConn?.user_id) {
+          try { config = await getUserMPConfig(anyConn.user_id as string); } catch (_e) { /* noop */ }
+        }
+      }
+
+      if (!config) {
+        console.warn("[payments] webhook-skip-no-config", JSON.stringify({ payment_id: paymentId }));
+        return new Response("OK", { status: 200, headers: corsHeaders });
+      }
+
       const mpPayment = await mpFetch(`/v1/payments/${paymentId}`, config, {}, {
         operation: "webhook-fetch", payment_id: paymentId,
       });
@@ -821,26 +852,22 @@ async function handleWebhook(req: Request): Promise<Response> {
         ? mpPayment.external_reference
         : null;
 
-      // Match by provider_charge_id OR external_reference (covers Checkout Pro flow)
-      let chargeQuery = serviceClient.from("payment_charges").select("*").limit(1);
-      const { data: matchByMp } = await serviceClient
-        .from("payment_charges")
-        .select("*")
-        .eq("provider_charge_id", paymentId)
-        .limit(1);
-
-      let charges = matchByMp ?? [];
-      if (charges.length === 0 && externalRef) {
+      if (!charge && externalRef) {
         const { data: matchByRef } = await serviceClient
           .from("payment_charges")
           .select("*")
           .eq("external_reference", externalRef)
           .limit(1);
         charges = matchByRef ?? [];
+        charge = charges[0] ?? null;
+
+        // Reabrimos o config no token correto do dono da cobrança.
+        if (charge) {
+          try { config = await getUserMPConfig(charge.user_id as string); } catch (_e) { /* noop */ }
+        }
       }
 
-      if (charges.length > 0) {
-        const charge = charges[0];
+      if (charge) {
         const mpStatus = String(mpPayment?.status || "pending");
         const mpStatusDetail = String(mpPayment?.status_detail || "");
         const isPaid = mpStatus === "approved" || mpStatusDetail === "accredited";
