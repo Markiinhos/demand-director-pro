@@ -437,8 +437,8 @@ function buildIdentification(payer: ResolvedPayer) {
 
 // ---------------- Routes ----------------
 async function getConfigStatus(req: Request): Promise<Response> {
-  await getAuthenticatedUser(req);
-  return jsonResponse(getMPConfigStatus());
+  const { userId } = await getAuthenticatedUser(req);
+  return jsonResponse(await getConnectionStatus(userId));
 }
 
 async function parseBody(req: Request): Promise<Record<string, unknown>> {
@@ -452,7 +452,7 @@ async function createPix(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const dueDate = normalizeDueDate(body.due_date);
   const expirationDate = dueDate
@@ -522,7 +522,7 @@ async function createBoleto(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const dueDate = normalizeDueDate(body.due_date) ?? getDefaultDateOnly(BOLETO_DEFAULT_EXPIRATION_DAYS);
   const expirationDate = dateOnlyToIso(dueDate, true);
@@ -591,7 +591,7 @@ async function createPaymentLink(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const expirationDays = Number(body.expiration_days) > 0
     ? Number(body.expiration_days)
@@ -699,8 +699,8 @@ async function getCharge(req: Request, id: string): Promise<Response> {
 }
 
 async function cancelCharge(req: Request, id: string): Promise<Response> {
-  const { supabase } = await getAuthenticatedUser(req);
-  const config = getMPConfig();
+  const { supabase, userId } = await getAuthenticatedUser(req);
+  const config = await getUserMPConfig(userId);
   const { data: charge, error: e1 } = await supabase.from("payment_charges").select("*").eq("id", id).single();
   if (e1) throw e1;
 
