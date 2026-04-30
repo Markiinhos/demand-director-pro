@@ -979,6 +979,130 @@ async function handleWebhook(req: Request): Promise<Response> {
   }
 }
 
+// ---------------- OAuth Mercado Pago (multi-tenant) ----------------
+function getOAuthAppCreds() {
+  const clientId = safeTrim(Deno.env.get("MP_CLIENT_ID"));
+  const clientSecret = safeTrim(Deno.env.get("MP_CLIENT_SECRET"));
+  if (!clientId || !clientSecret) {
+    throw new HttpError(503, "App OAuth do Mercado Pago não configurado (MP_CLIENT_ID/MP_CLIENT_SECRET).");
+  }
+  return { clientId, clientSecret };
+}
+
+function getAppOrigin(req: Request): string {
+  const origin = safeTrim(req.headers.get("origin")) ?? safeTrim(req.headers.get("referer"));
+  if (origin) {
+    try { return new URL(origin).origin; } catch { /* noop */ }
+  }
+  return safeTrim(Deno.env.get("APP_PUBLIC_URL")) ?? "";
+}
+
+async function oauthStart(req: Request): Promise<Response> {
+  const { userId } = await getAuthenticatedUser(req);
+  const { clientId } = getOAuthAppCreds();
+  const service = getServiceClient();
+
+  const state = crypto.randomUUID() + "." + crypto.randomUUID();
+  const { error } = await service.from("mp_oauth_states").insert({ state, user_id: userId });
+  if (error) throw new HttpError(500, "Falha ao iniciar OAuth.");
+
+  const callbackUrl = getOAuthCallbackUrl();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    platform_id: "mp",
+    state,
+    redirect_uri: callbackUrl,
+  });
+  const authorizeUrl = `https://auth.mercadopago.com.br/authorization?${params.toString()}`;
+  return jsonResponse({ authorize_url: authorizeUrl, state });
+}
+
+async function oauthCallback(req: Request): Promise<Response> {
+  // Endpoint público — Mercado Pago redireciona o navegador para cá com ?code&state.
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+
+  const finishWith = (status: "success" | "error", message: string) => {
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Mercado Pago</title>
+      <style>body{font-family:system-ui;background:#0b0f1a;color:#e6edf7;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+      .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:32px;max-width:420px;text-align:center}
+      h1{font-size:18px;margin:0 0 8px}p{color:#9ca3af;font-size:14px;margin:0 0 16px}
+      button{background:#2563eb;color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer}</style></head>
+      <body><div class="card"><h1>${status === "success" ? "✅ Mercado Pago conectado" : "⚠️ Falha ao conectar"}</h1>
+      <p>${message}</p><button onclick="window.close()">Fechar</button>
+      <script>try{window.opener&&window.opener.postMessage({type:'mp-oauth',status:'${status}'},'*');}catch(e){}</script>
+      </div></body></html>`;
+    return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+  };
+
+  if (error) return finishWith("error", `Mercado Pago retornou: ${error}`);
+  if (!code || !state) return finishWith("error", "Parâmetros ausentes (code/state).");
+
+  const service = getServiceClient();
+  const { data: stateRow } = await service
+    .from("mp_oauth_states").select("user_id, expires_at").eq("state", state).maybeSingle();
+  if (!stateRow?.user_id) return finishWith("error", "State inválido ou expirado.");
+  if (stateRow.expires_at && Date.parse(stateRow.expires_at) < Date.now()) {
+    return finishWith("error", "Sessão de autorização expirada. Tente novamente.");
+  }
+  const userId = stateRow.user_id as string;
+  await service.from("mp_oauth_states").delete().eq("state", state);
+
+  try {
+    const { clientId, clientSecret } = getOAuthAppCreds();
+    const tokenRes = await fetch(`${MP_API}/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: getOAuthCallbackUrl(),
+      }).toString(),
+    });
+    const tokenJson = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokenJson?.access_token) {
+      console.error("[payments] oauth-token-error", JSON.stringify(tokenJson));
+      return finishWith("error", tokenJson?.message || "Não foi possível obter o token.");
+    }
+    const expiresIn = Number(tokenJson.expires_in) || 0;
+    const expiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+
+    const { error: upErr } = await service.from("mp_connections").upsert({
+      user_id: userId,
+      mp_user_id: String(tokenJson.user_id ?? ""),
+      access_token: String(tokenJson.access_token),
+      refresh_token: tokenJson.refresh_token ? String(tokenJson.refresh_token) : null,
+      public_key: tokenJson.public_key ? String(tokenJson.public_key) : null,
+      live_mode: Boolean(tokenJson.live_mode),
+      scope: tokenJson.scope ? String(tokenJson.scope) : null,
+      token_type: tokenJson.token_type ? String(tokenJson.token_type) : null,
+      expires_at: expiresAt,
+      connected_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (upErr) {
+      console.error("[payments] oauth-upsert-error", upErr.message);
+      return finishWith("error", "Falha ao salvar conexão.");
+    }
+    return finishWith("success", "Você já pode emitir cobranças com sua conta.");
+  } catch (e) {
+    console.error("[payments] oauth-callback-fatal", getErrorMessage(e));
+    return finishWith("error", getErrorMessage(e));
+  }
+}
+
+async function oauthDisconnect(req: Request): Promise<Response> {
+  const { userId } = await getAuthenticatedUser(req);
+  const service = getServiceClient();
+  const { error } = await service.from("mp_connections").delete().eq("user_id", userId);
+  if (error) throw new HttpError(500, "Falha ao desconectar.");
+  return jsonResponse({ ok: true });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
