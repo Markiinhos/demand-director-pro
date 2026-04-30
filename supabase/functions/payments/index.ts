@@ -997,13 +997,36 @@ function getAppOrigin(req: Request): string {
   return safeTrim(Deno.env.get("APP_PUBLIC_URL")) ?? "";
 }
 
+function base64UrlEncode(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function generateCodeVerifier(): string {
+  // 64 bytes => 86 chars base64url (within MP's 43-128 range)
+  const buf = new Uint8Array(64);
+  crypto.getRandomValues(buf);
+  return base64UrlEncode(buf);
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
 async function oauthStart(req: Request): Promise<Response> {
   const { userId } = await getAuthenticatedUser(req);
   const { clientId } = getOAuthAppCreds();
   const service = getServiceClient();
 
   const state = crypto.randomUUID() + "." + crypto.randomUUID();
-  const { error } = await service.from("mp_oauth_states").insert({ state, user_id: userId });
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const { error } = await service
+    .from("mp_oauth_states")
+    .insert({ state, user_id: userId, code_verifier: codeVerifier });
   if (error) throw new HttpError(500, "Falha ao iniciar OAuth.");
 
   const callbackUrl = getOAuthCallbackUrl();
@@ -1013,6 +1036,8 @@ async function oauthStart(req: Request): Promise<Response> {
     platform_id: "mp",
     state,
     redirect_uri: callbackUrl,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
   const authorizeUrl = `https://auth.mercadopago.com.br/authorization?${params.toString()}`;
   return jsonResponse({ authorize_url: authorizeUrl, state });
@@ -1043,26 +1068,29 @@ async function oauthCallback(req: Request): Promise<Response> {
 
   const service = getServiceClient();
   const { data: stateRow } = await service
-    .from("mp_oauth_states").select("user_id, expires_at").eq("state", state).maybeSingle();
+    .from("mp_oauth_states").select("user_id, expires_at, code_verifier").eq("state", state).maybeSingle();
   if (!stateRow?.user_id) return finishWith("error", "State inválido ou expirado.");
   if (stateRow.expires_at && Date.parse(stateRow.expires_at) < Date.now()) {
     return finishWith("error", "Sessão de autorização expirada. Tente novamente.");
   }
   const userId = stateRow.user_id as string;
+  const codeVerifier = (stateRow.code_verifier as string | null) ?? null;
   await service.from("mp_oauth_states").delete().eq("state", state);
 
   try {
     const { clientId, clientSecret } = getOAuthAppCreds();
+    const tokenBody: Record<string, string> = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: getOAuthCallbackUrl(),
+    };
+    if (codeVerifier) tokenBody.code_verifier = codeVerifier;
     const tokenRes = await fetch(`${MP_API}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: getOAuthCallbackUrl(),
-      }).toString(),
+      body: new URLSearchParams(tokenBody).toString(),
     });
     const tokenJson = await tokenRes.json().catch(() => ({}));
     if (!tokenRes.ok || !tokenJson?.access_token) {

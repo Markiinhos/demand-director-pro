@@ -546,18 +546,21 @@ export type Database = {
       }
       mp_oauth_states: {
         Row: {
+          code_verifier: string | null
           created_at: string
           expires_at: string
           state: string
           user_id: string
         }
         Insert: {
+          code_verifier?: string | null
           created_at?: string
           expires_at?: string
           state: string
           user_id: string
         }
         Update: {
+          code_verifier?: string | null
           created_at?: string
           expires_at?: string
           state?: string
