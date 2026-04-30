@@ -379,7 +379,7 @@ function buildMPErrorPayload(payload: Record<string, unknown> | null, raw: strin
 
 async function mpFetch(
   path: string,
-  config: ReturnType<typeof getMPConfig>,
+  config: MPUserConfig,
   options: RequestInit = {},
   context?: Record<string, unknown>,
 ) {
