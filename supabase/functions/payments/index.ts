@@ -15,6 +15,13 @@ type SupabaseClient = ReturnType<typeof createClient>;
 type ChargeOperation = "pix" | "boleto" | "link";
 type DocumentType = "CPF" | "CNPJ";
 
+interface MPUserConfig {
+  accessToken: string;
+  environment: MPEnvironment;
+  mpUserId: string;
+  liveMode: boolean;
+}
+
 class HttpError extends Error {
   status: number;
   payload?: Record<string, unknown>;
@@ -121,45 +128,66 @@ function detectEnv(v?: string): MPEnvironment | "unknown" {
   return "unknown";
 }
 
-function getMPConfigStatus() {
-  const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
-  const environment = detectEnv(accessToken);
-  const issues: string[] = [];
-  if (!accessToken) {
-    issues.push("Credenciais do Mercado Pago não configuradas (MERCADO_PAGO_ACCESS_TOKEN ausente).");
-  } else if (environment === "unknown") {
-    issues.push("Não foi possível identificar se o token é test ou production.");
+async function getUserMPConfig(userId: string): Promise<MPUserConfig> {
+  const service = getServiceClient();
+  const { data, error } = await service
+    .from("mp_connections")
+    .select("access_token, mp_user_id, live_mode")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new HttpError(500, "Erro ao buscar conexão Mercado Pago.");
+  if (!data?.access_token) {
+    throw new HttpError(412, "Conta Mercado Pago não conectada. Conecte em Configurações → Integrações.");
   }
-  if (!webhookSecret) {
-    issues.push("Webhook do Mercado Pago não configurado (MERCADO_PAGO_WEBHOOK_SECRET ausente).");
-  }
+  const env = detectEnv(data.access_token as string);
   return {
-    environment,
-    isReady: issues.length === 0,
-    issues,
-    accessTokenConfigured: Boolean(accessToken),
-    clientSecretConfigured: Boolean(safeTrim(Deno.env.get("MERCADO_PAGO_CLIENT_SECRET"))),
-    webhookSecretConfigured: Boolean(webhookSecret),
+    accessToken: data.access_token as string,
+    environment: env === "unknown" ? (data.live_mode ? "production" : "test") : env,
+    mpUserId: String(data.mp_user_id ?? ""),
+    liveMode: Boolean(data.live_mode),
   };
 }
 
-function getMPConfig() {
-  const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const status = getMPConfigStatus();
-  if (!accessToken) {
-    throw new HttpError(503, "Credenciais do Mercado Pago não configuradas. Adicione MERCADO_PAGO_ACCESS_TOKEN.");
-  }
-  if (status.environment === "unknown") {
-    throw new HttpError(503, "Token do Mercado Pago inválido (esperado prefixo TEST- ou APP_USR-).");
-  }
-  return { accessToken, environment: status.environment };
+async function getConnectionStatus(userId: string) {
+  const service = getServiceClient();
+  const { data } = await service
+    .from("mp_connections")
+    .select("mp_user_id, live_mode, scope, connected_at, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
+  const clientId = safeTrim(Deno.env.get("MP_CLIENT_ID"));
+  const clientSecret = safeTrim(Deno.env.get("MP_CLIENT_SECRET"));
+  const connected = Boolean(data?.mp_user_id);
+  const issues: string[] = [];
+  if (!clientId || !clientSecret) issues.push("App OAuth do Mercado Pago não configurado (MP_CLIENT_ID/MP_CLIENT_SECRET ausentes).");
+  if (!webhookSecret) issues.push("Webhook do Mercado Pago não configurado.");
+  if (!connected) issues.push("Conta Mercado Pago do usuário não conectada.");
+  return {
+    connected,
+    mp_user_id: data?.mp_user_id ?? null,
+    live_mode: Boolean(data?.live_mode),
+    environment: data?.live_mode ? "production" : "test",
+    scope: data?.scope ?? null,
+    connected_at: data?.connected_at ?? null,
+    expires_at: data?.expires_at ?? null,
+    isReady: connected && !!webhookSecret && !!clientId && !!clientSecret,
+    issues,
+    webhookSecretConfigured: Boolean(webhookSecret),
+    oauthAppConfigured: Boolean(clientId && clientSecret),
+  };
 }
 
 function getWebhookUrl(): string {
   const url = safeTrim(Deno.env.get("SUPABASE_URL"));
   if (!url) throw new HttpError(500, "SUPABASE_URL não configurado.");
   return `${url}/functions/v1/payments/webhook`;
+}
+
+function getOAuthCallbackUrl(): string {
+  const url = safeTrim(Deno.env.get("SUPABASE_URL"));
+  if (!url) throw new HttpError(500, "SUPABASE_URL não configurado.");
+  return `${url}/functions/v1/payments/oauth-callback`;
 }
 
 async function getAuthenticatedUser(req: Request) {
