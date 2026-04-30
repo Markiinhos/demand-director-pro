@@ -1114,6 +1114,9 @@ Deno.serve(async (req) => {
 
     if (path === "webhook" && req.method === "POST") return await handleWebhook(req);
     if (path === "config-status" && req.method === "GET") return await getConfigStatus(req);
+    if (path === "oauth-start" && req.method === "POST") return await oauthStart(req);
+    if (path === "oauth-callback" && req.method === "GET") return await oauthCallback(req);
+    if (path === "disconnect" && req.method === "POST") return await oauthDisconnect(req);
     if (path === "create-pix" && req.method === "POST") return await createPix(req);
     if (path === "create-boleto" && req.method === "POST") return await createBoleto(req);
     if (path === "create-link" && req.method === "POST") return await createPaymentLink(req);
