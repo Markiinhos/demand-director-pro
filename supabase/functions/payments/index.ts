@@ -15,6 +15,13 @@ type SupabaseClient = ReturnType<typeof createClient>;
 type ChargeOperation = "pix" | "boleto" | "link";
 type DocumentType = "CPF" | "CNPJ";
 
+interface MPUserConfig {
+  accessToken: string;
+  environment: MPEnvironment;
+  mpUserId: string;
+  liveMode: boolean;
+}
+
 class HttpError extends Error {
   status: number;
   payload?: Record<string, unknown>;
@@ -121,45 +128,66 @@ function detectEnv(v?: string): MPEnvironment | "unknown" {
   return "unknown";
 }
 
-function getMPConfigStatus() {
-  const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
-  const environment = detectEnv(accessToken);
-  const issues: string[] = [];
-  if (!accessToken) {
-    issues.push("Credenciais do Mercado Pago não configuradas (MERCADO_PAGO_ACCESS_TOKEN ausente).");
-  } else if (environment === "unknown") {
-    issues.push("Não foi possível identificar se o token é test ou production.");
+async function getUserMPConfig(userId: string): Promise<MPUserConfig> {
+  const service = getServiceClient();
+  const { data, error } = await service
+    .from("mp_connections")
+    .select("access_token, mp_user_id, live_mode")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new HttpError(500, "Erro ao buscar conexão Mercado Pago.");
+  if (!data?.access_token) {
+    throw new HttpError(412, "Conta Mercado Pago não conectada. Conecte em Configurações → Integrações.");
   }
-  if (!webhookSecret) {
-    issues.push("Webhook do Mercado Pago não configurado (MERCADO_PAGO_WEBHOOK_SECRET ausente).");
-  }
+  const env = detectEnv(data.access_token as string);
   return {
-    environment,
-    isReady: issues.length === 0,
-    issues,
-    accessTokenConfigured: Boolean(accessToken),
-    clientSecretConfigured: Boolean(safeTrim(Deno.env.get("MERCADO_PAGO_CLIENT_SECRET"))),
-    webhookSecretConfigured: Boolean(webhookSecret),
+    accessToken: data.access_token as string,
+    environment: env === "unknown" ? (data.live_mode ? "production" : "test") : env,
+    mpUserId: String(data.mp_user_id ?? ""),
+    liveMode: Boolean(data.live_mode),
   };
 }
 
-function getMPConfig() {
-  const accessToken = safeTrim(Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN"));
-  const status = getMPConfigStatus();
-  if (!accessToken) {
-    throw new HttpError(503, "Credenciais do Mercado Pago não configuradas. Adicione MERCADO_PAGO_ACCESS_TOKEN.");
-  }
-  if (status.environment === "unknown") {
-    throw new HttpError(503, "Token do Mercado Pago inválido (esperado prefixo TEST- ou APP_USR-).");
-  }
-  return { accessToken, environment: status.environment };
+async function getConnectionStatus(userId: string) {
+  const service = getServiceClient();
+  const { data } = await service
+    .from("mp_connections")
+    .select("mp_user_id, live_mode, scope, connected_at, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const webhookSecret = safeTrim(Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET"));
+  const clientId = safeTrim(Deno.env.get("MP_CLIENT_ID"));
+  const clientSecret = safeTrim(Deno.env.get("MP_CLIENT_SECRET"));
+  const connected = Boolean(data?.mp_user_id);
+  const issues: string[] = [];
+  if (!clientId || !clientSecret) issues.push("App OAuth do Mercado Pago não configurado (MP_CLIENT_ID/MP_CLIENT_SECRET ausentes).");
+  if (!webhookSecret) issues.push("Webhook do Mercado Pago não configurado.");
+  if (!connected) issues.push("Conta Mercado Pago do usuário não conectada.");
+  return {
+    connected,
+    mp_user_id: data?.mp_user_id ?? null,
+    live_mode: Boolean(data?.live_mode),
+    environment: data?.live_mode ? "production" : "test",
+    scope: data?.scope ?? null,
+    connected_at: data?.connected_at ?? null,
+    expires_at: data?.expires_at ?? null,
+    isReady: connected && !!webhookSecret && !!clientId && !!clientSecret,
+    issues,
+    webhookSecretConfigured: Boolean(webhookSecret),
+    oauthAppConfigured: Boolean(clientId && clientSecret),
+  };
 }
 
 function getWebhookUrl(): string {
   const url = safeTrim(Deno.env.get("SUPABASE_URL"));
   if (!url) throw new HttpError(500, "SUPABASE_URL não configurado.");
   return `${url}/functions/v1/payments/webhook`;
+}
+
+function getOAuthCallbackUrl(): string {
+  const url = safeTrim(Deno.env.get("SUPABASE_URL"));
+  if (!url) throw new HttpError(500, "SUPABASE_URL não configurado.");
+  return `${url}/functions/v1/payments/oauth-callback`;
 }
 
 async function getAuthenticatedUser(req: Request) {
@@ -409,8 +437,8 @@ function buildIdentification(payer: ResolvedPayer) {
 
 // ---------------- Routes ----------------
 async function getConfigStatus(req: Request): Promise<Response> {
-  await getAuthenticatedUser(req);
-  return jsonResponse(getMPConfigStatus());
+  const { userId } = await getAuthenticatedUser(req);
+  return jsonResponse(await getConnectionStatus(userId));
 }
 
 async function parseBody(req: Request): Promise<Record<string, unknown>> {
@@ -424,7 +452,7 @@ async function createPix(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const dueDate = normalizeDueDate(body.due_date);
   const expirationDate = dueDate
@@ -494,7 +522,7 @@ async function createBoleto(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const dueDate = normalizeDueDate(body.due_date) ?? getDefaultDateOnly(BOLETO_DEFAULT_EXPIRATION_DAYS);
   const expirationDate = dateOnlyToIso(dueDate, true);
@@ -563,7 +591,7 @@ async function createPaymentLink(req: Request): Promise<Response> {
   const { supabase, userId } = await getAuthenticatedUser(req);
   const body = await parseBody(req);
   const { clientId, description, amount } = validateCommon(body);
-  const config = getMPConfig();
+  const config = await getUserMPConfig(userId);
 
   const expirationDays = Number(body.expiration_days) > 0
     ? Number(body.expiration_days)
@@ -671,8 +699,8 @@ async function getCharge(req: Request, id: string): Promise<Response> {
 }
 
 async function cancelCharge(req: Request, id: string): Promise<Response> {
-  const { supabase } = await getAuthenticatedUser(req);
-  const config = getMPConfig();
+  const { supabase, userId } = await getAuthenticatedUser(req);
+  const config = await getUserMPConfig(userId);
   const { data: charge, error: e1 } = await supabase.from("payment_charges").select("*").eq("id", id).single();
   if (e1) throw e1;
 
@@ -773,18 +801,49 @@ async function handleWebhook(req: Request): Promise<Response> {
     .single();
   const eventId = event?.id ?? null;
 
-  // Only need credentials when there's a payment to fetch
-  let config: ReturnType<typeof getMPConfig> | null = null;
-  try {
-    config = getMPConfig();
-  } catch (e) {
-    console.error("[payments] webhook-no-config", getErrorMessage(e));
-    return new Response("OK", { status: 200, headers: corsHeaders });
-  }
-
   if (payload.type === "payment" && isObject(payload.data) && payload.data.id) {
     const paymentId = String(payload.data.id);
     try {
+      // Localiza a cobrança ANTES de chamar a API do MP, para descobrir
+      // qual usuário (e portanto qual access_token) usar.
+      const { data: matchByMp } = await serviceClient
+        .from("payment_charges")
+        .select("*")
+        .eq("provider_charge_id", paymentId)
+        .limit(1);
+      let charges = matchByMp ?? [];
+
+      // Sem match direto: tentamos via metadata (Checkout Pro guarda mp_preference_id).
+      // Como não temos o external_reference ainda, faremos um lookup secundário
+      // depois de obter os dados do pagamento.
+      let charge = charges[0] ?? null;
+
+      // Se ainda não encontramos a cobrança pelo provider_charge_id, precisamos
+      // primeiro pegar o pagamento usando QUALQUER token configurado para
+      // descobrir o external_reference. Estratégia: tentamos um token de qualquer
+      // conexão recente — se falhar, registramos e saímos. Em produção, o webhook
+      // do MP sempre vem da conta do dono, então podemos tentar primeiro com a
+      // primeira conexão disponível como fallback de descoberta.
+      let config: MPUserConfig | null = null;
+      if (charge) {
+        try { config = await getUserMPConfig(charge.user_id as string); } catch (e) {
+          console.error("[payments] webhook-no-user-config", getErrorMessage(e));
+        }
+      } else {
+        // Sem cobrança ainda: tenta por external_reference depois de buscar via
+        // a primeira conexão disponível.
+        const { data: anyConn } = await serviceClient
+          .from("mp_connections").select("user_id").limit(1).maybeSingle();
+        if (anyConn?.user_id) {
+          try { config = await getUserMPConfig(anyConn.user_id as string); } catch (_e) { /* noop */ }
+        }
+      }
+
+      if (!config) {
+        console.warn("[payments] webhook-skip-no-config", JSON.stringify({ payment_id: paymentId }));
+        return new Response("OK", { status: 200, headers: corsHeaders });
+      }
+
       const mpPayment = await mpFetch(`/v1/payments/${paymentId}`, config, {}, {
         operation: "webhook-fetch", payment_id: paymentId,
       });
@@ -793,26 +852,22 @@ async function handleWebhook(req: Request): Promise<Response> {
         ? mpPayment.external_reference
         : null;
 
-      // Match by provider_charge_id OR external_reference (covers Checkout Pro flow)
-      let chargeQuery = serviceClient.from("payment_charges").select("*").limit(1);
-      const { data: matchByMp } = await serviceClient
-        .from("payment_charges")
-        .select("*")
-        .eq("provider_charge_id", paymentId)
-        .limit(1);
-
-      let charges = matchByMp ?? [];
-      if (charges.length === 0 && externalRef) {
+      if (!charge && externalRef) {
         const { data: matchByRef } = await serviceClient
           .from("payment_charges")
           .select("*")
           .eq("external_reference", externalRef)
           .limit(1);
         charges = matchByRef ?? [];
+        charge = charges[0] ?? null;
+
+        // Reabrimos o config no token correto do dono da cobrança.
+        if (charge) {
+          try { config = await getUserMPConfig(charge.user_id as string); } catch (_e) { /* noop */ }
+        }
       }
 
-      if (charges.length > 0) {
-        const charge = charges[0];
+      if (charge) {
         const mpStatus = String(mpPayment?.status || "pending");
         const mpStatusDetail = String(mpPayment?.status_detail || "");
         const isPaid = mpStatus === "approved" || mpStatusDetail === "accredited";
@@ -924,6 +979,130 @@ async function handleWebhook(req: Request): Promise<Response> {
   }
 }
 
+// ---------------- OAuth Mercado Pago (multi-tenant) ----------------
+function getOAuthAppCreds() {
+  const clientId = safeTrim(Deno.env.get("MP_CLIENT_ID"));
+  const clientSecret = safeTrim(Deno.env.get("MP_CLIENT_SECRET"));
+  if (!clientId || !clientSecret) {
+    throw new HttpError(503, "App OAuth do Mercado Pago não configurado (MP_CLIENT_ID/MP_CLIENT_SECRET).");
+  }
+  return { clientId, clientSecret };
+}
+
+function getAppOrigin(req: Request): string {
+  const origin = safeTrim(req.headers.get("origin")) ?? safeTrim(req.headers.get("referer"));
+  if (origin) {
+    try { return new URL(origin).origin; } catch { /* noop */ }
+  }
+  return safeTrim(Deno.env.get("APP_PUBLIC_URL")) ?? "";
+}
+
+async function oauthStart(req: Request): Promise<Response> {
+  const { userId } = await getAuthenticatedUser(req);
+  const { clientId } = getOAuthAppCreds();
+  const service = getServiceClient();
+
+  const state = crypto.randomUUID() + "." + crypto.randomUUID();
+  const { error } = await service.from("mp_oauth_states").insert({ state, user_id: userId });
+  if (error) throw new HttpError(500, "Falha ao iniciar OAuth.");
+
+  const callbackUrl = getOAuthCallbackUrl();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    platform_id: "mp",
+    state,
+    redirect_uri: callbackUrl,
+  });
+  const authorizeUrl = `https://auth.mercadopago.com.br/authorization?${params.toString()}`;
+  return jsonResponse({ authorize_url: authorizeUrl, state });
+}
+
+async function oauthCallback(req: Request): Promise<Response> {
+  // Endpoint público — Mercado Pago redireciona o navegador para cá com ?code&state.
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+
+  const finishWith = (status: "success" | "error", message: string) => {
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Mercado Pago</title>
+      <style>body{font-family:system-ui;background:#0b0f1a;color:#e6edf7;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+      .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:32px;max-width:420px;text-align:center}
+      h1{font-size:18px;margin:0 0 8px}p{color:#9ca3af;font-size:14px;margin:0 0 16px}
+      button{background:#2563eb;color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer}</style></head>
+      <body><div class="card"><h1>${status === "success" ? "✅ Mercado Pago conectado" : "⚠️ Falha ao conectar"}</h1>
+      <p>${message}</p><button onclick="window.close()">Fechar</button>
+      <script>try{window.opener&&window.opener.postMessage({type:'mp-oauth',status:'${status}'},'*');}catch(e){}</script>
+      </div></body></html>`;
+    return new Response(html, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } });
+  };
+
+  if (error) return finishWith("error", `Mercado Pago retornou: ${error}`);
+  if (!code || !state) return finishWith("error", "Parâmetros ausentes (code/state).");
+
+  const service = getServiceClient();
+  const { data: stateRow } = await service
+    .from("mp_oauth_states").select("user_id, expires_at").eq("state", state).maybeSingle();
+  if (!stateRow?.user_id) return finishWith("error", "State inválido ou expirado.");
+  if (stateRow.expires_at && Date.parse(stateRow.expires_at) < Date.now()) {
+    return finishWith("error", "Sessão de autorização expirada. Tente novamente.");
+  }
+  const userId = stateRow.user_id as string;
+  await service.from("mp_oauth_states").delete().eq("state", state);
+
+  try {
+    const { clientId, clientSecret } = getOAuthAppCreds();
+    const tokenRes = await fetch(`${MP_API}/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: getOAuthCallbackUrl(),
+      }).toString(),
+    });
+    const tokenJson = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokenJson?.access_token) {
+      console.error("[payments] oauth-token-error", JSON.stringify(tokenJson));
+      return finishWith("error", tokenJson?.message || "Não foi possível obter o token.");
+    }
+    const expiresIn = Number(tokenJson.expires_in) || 0;
+    const expiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+
+    const { error: upErr } = await service.from("mp_connections").upsert({
+      user_id: userId,
+      mp_user_id: String(tokenJson.user_id ?? ""),
+      access_token: String(tokenJson.access_token),
+      refresh_token: tokenJson.refresh_token ? String(tokenJson.refresh_token) : null,
+      public_key: tokenJson.public_key ? String(tokenJson.public_key) : null,
+      live_mode: Boolean(tokenJson.live_mode),
+      scope: tokenJson.scope ? String(tokenJson.scope) : null,
+      token_type: tokenJson.token_type ? String(tokenJson.token_type) : null,
+      expires_at: expiresAt,
+      connected_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (upErr) {
+      console.error("[payments] oauth-upsert-error", upErr.message);
+      return finishWith("error", "Falha ao salvar conexão.");
+    }
+    return finishWith("success", "Você já pode emitir cobranças com sua conta.");
+  } catch (e) {
+    console.error("[payments] oauth-callback-fatal", getErrorMessage(e));
+    return finishWith("error", getErrorMessage(e));
+  }
+}
+
+async function oauthDisconnect(req: Request): Promise<Response> {
+  const { userId } = await getAuthenticatedUser(req);
+  const service = getServiceClient();
+  const { error } = await service.from("mp_connections").delete().eq("user_id", userId);
+  if (error) throw new HttpError(500, "Falha ao desconectar.");
+  return jsonResponse({ ok: true });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -935,6 +1114,9 @@ Deno.serve(async (req) => {
 
     if (path === "webhook" && req.method === "POST") return await handleWebhook(req);
     if (path === "config-status" && req.method === "GET") return await getConfigStatus(req);
+    if (path === "oauth-start" && req.method === "POST") return await oauthStart(req);
+    if (path === "oauth-callback" && req.method === "GET") return await oauthCallback(req);
+    if (path === "disconnect" && req.method === "POST") return await oauthDisconnect(req);
     if (path === "create-pix" && req.method === "POST") return await createPix(req);
     if (path === "create-boleto" && req.method === "POST") return await createBoleto(req);
     if (path === "create-link" && req.method === "POST") return await createPaymentLink(req);

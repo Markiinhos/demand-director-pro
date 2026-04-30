@@ -1,13 +1,15 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { usePayments } from "@/hooks/usePayments";
 import { useClients } from "@/hooks/useClients";
+import { useMpConnection } from "@/hooks/useMpConnection";
 import { CreateChargeDialog } from "@/components/payments/CreateChargeDialog";
 import { ChargeDetailDialog } from "@/components/payments/ChargeDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, QrCode, FileText, Link2 } from "lucide-react";
+import { Plus, Search, Loader2, QrCode, FileText, Link2, AlertCircle } from "lucide-react";
 import type { PaymentCharge, PaymentMethod } from "@/types/payments";
 import { statusLabels, statusColors, methodLabels } from "@/types/payments";
 
@@ -16,11 +18,13 @@ const methodIcons: Record<PaymentMethod, typeof QrCode> = { pix: QrCode, boleto:
 export default function Cobrancas() {
   const { charges, isLoading } = usePayments();
   const { clients } = useClients();
+  const { status: mpStatus } = useMpConnection();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedCharge, setSelectedCharge] = useState<PaymentCharge | null>(null);
   const [search, setSearch] = useState("");
   const [filterMethod, setFilterMethod] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const notConnected = mpStatus.data && !mpStatus.data.connected;
 
   const filtered = charges.filter(c => {
     if (filterMethod !== "all" && c.payment_method !== filterMethod) return false;
@@ -44,8 +48,19 @@ export default function Cobrancas() {
           <h1 className="text-2xl font-bold">Cobranças</h1>
           <p className="text-muted-foreground text-sm">Pix, boleto e link de pagamento via Mercado Pago</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1.5" />Nova Cobrança</Button>
+        <Button onClick={() => setCreateOpen(true)} disabled={!!notConnected}><Plus className="h-4 w-4 mr-1.5" />Nova Cobrança</Button>
       </div>
+
+      {notConnected && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Conecte sua conta Mercado Pago</p>
+            <p className="text-xs text-muted-foreground">Você precisa conectar o seu MP para emitir cobranças no seu próprio CNPJ/CPF.</p>
+          </div>
+          <Button asChild size="sm"><Link to="/integracoes">Conectar</Link></Button>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <div className="relative flex-1">

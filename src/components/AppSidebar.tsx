@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard } from "lucide-react";
+import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard, Plug } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -23,6 +23,7 @@ const navItems = [
   { title: "Cobranças", url: "/cobrancas", icon: CreditCard },
   { title: "Orçamentos", url: "/orcamentos", icon: FileText },
   { title: "Calculadora", url: "/calculadora", icon: Calculator },
+  { title: "Integrações", url: "/integracoes", icon: Plug },
 ];
 
 export function AppSidebar() {
