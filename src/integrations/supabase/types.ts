@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      briefing_responses: {
+        Row: {
+          answers: Json
+          briefing_id: string
+          id: string
+          respondent_email: string | null
+          respondent_name: string | null
+          submitted_at: string
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          briefing_id: string
+          id?: string
+          respondent_email?: string | null
+          respondent_name?: string | null
+          submitted_at?: string
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          briefing_id?: string
+          id?: string
+          respondent_email?: string | null
+          respondent_name?: string | null
+          submitted_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      briefings: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          demand_id: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          schema: Json
+          status: Database["public"]["Enums"]["briefing_status"]
+          title: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          schema?: Json
+          status?: Database["public"]["Enums"]["briefing_status"]
+          title: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          schema?: Json
+          status?: Database["public"]["Enums"]["briefing_status"]
+          title?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       budget_items: {
         Row: {
           budget_id: string
@@ -60,11 +135,15 @@ export type Database = {
       }
       budgets: {
         Row: {
+          accepted_at: string | null
+          accepted_by_name: string | null
           client_id: string
           created_at: string
           description: string | null
           id: string
           notes: string | null
+          payment_charge_id: string | null
+          public_slug: string | null
           status: Database["public"]["Enums"]["budget_status"]
           title: string
           total_amount: number
@@ -73,11 +152,15 @@ export type Database = {
           valid_until: string | null
         }
         Insert: {
+          accepted_at?: string | null
+          accepted_by_name?: string | null
           client_id: string
           created_at?: string
           description?: string | null
           id?: string
           notes?: string | null
+          payment_charge_id?: string | null
+          public_slug?: string | null
           status?: Database["public"]["Enums"]["budget_status"]
           title: string
           total_amount?: number
@@ -86,11 +169,15 @@ export type Database = {
           valid_until?: string | null
         }
         Update: {
+          accepted_at?: string | null
+          accepted_by_name?: string | null
           client_id?: string
           created_at?: string
           description?: string | null
           id?: string
           notes?: string | null
+          payment_charge_id?: string | null
+          public_slug?: string | null
           status?: Database["public"]["Enums"]["budget_status"]
           title?: string
           total_amount?: number
@@ -195,6 +282,42 @@ export type Database = {
           },
         ]
       }
+      client_portal_tokens: {
+        Row: {
+          client_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          last_accessed_at: string | null
+          revoked: boolean
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          revoked?: boolean
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          revoked?: boolean
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           city: string | null
@@ -280,6 +403,162 @@ export type Database = {
           type?: Database["public"]["Enums"]["client_type"]
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      contract_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_name: string
+          file_type: string
+          file_url: string
+          id: string
+          is_default: boolean
+          name: string
+          placeholders: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_type?: string
+          file_url: string
+          id?: string
+          is_default?: boolean
+          name: string
+          placeholders?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          placeholders?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contracts: {
+        Row: {
+          budget_id: string | null
+          client_id: string
+          created_at: string
+          generated_pdf_url: string | null
+          id: string
+          signed_at: string | null
+          status: Database["public"]["Enums"]["contract_status"]
+          template_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          variables: Json
+        }
+        Insert: {
+          budget_id?: string | null
+          client_id: string
+          created_at?: string
+          generated_pdf_url?: string | null
+          id?: string
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["contract_status"]
+          template_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+          variables?: Json
+        }
+        Update: {
+          budget_id?: string | null
+          client_id?: string
+          created_at?: string
+          generated_pdf_url?: string | null
+          id?: string
+          signed_at?: string | null
+          status?: Database["public"]["Enums"]["contract_status"]
+          template_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          variables?: Json
+        }
+        Relationships: []
+      }
+      demand_feedback: {
+        Row: {
+          action: Database["public"]["Enums"]["demand_feedback_action"]
+          author_name: string | null
+          comment: string | null
+          created_at: string
+          demand_id: string
+          id: string
+          source: string
+          user_id: string
+          version_id: string | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["demand_feedback_action"]
+          author_name?: string | null
+          comment?: string | null
+          created_at?: string
+          demand_id: string
+          id?: string
+          source?: string
+          user_id: string
+          version_id?: string | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["demand_feedback_action"]
+          author_name?: string | null
+          comment?: string | null
+          created_at?: string
+          demand_id?: string
+          id?: string
+          source?: string
+          user_id?: string
+          version_id?: string | null
+        }
+        Relationships: []
+      }
+      demand_versions: {
+        Row: {
+          created_at: string
+          demand_id: string
+          file_name: string | null
+          file_url: string | null
+          id: string
+          notes: string | null
+          user_id: string
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          demand_id: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          user_id: string
+          version_number?: number
+        }
+        Update: {
+          created_at?: string
+          demand_id?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          user_id?: string
+          version_number?: number
         }
         Relationships: []
       }
@@ -963,10 +1242,13 @@ export type Database = {
       get_upcoming_payments: { Args: never; Returns: Json }
     }
     Enums: {
-      budget_status: "rascunho" | "enviado" | "aprovado" | "recusado"
+      briefing_status: "draft" | "sent" | "answered" | "archived"
+      budget_status: "rascunho" | "enviado" | "aprovado" | "recusado" | "aceito"
       client_status: "lead" | "ativo" | "inativo"
       client_type: "cliente" | "lead" | "terceirizado" | "parceiro"
       close_potential: "baixo" | "medio" | "alto"
+      contract_status: "draft" | "sent" | "signed" | "cancelled"
+      demand_feedback_action: "approved" | "changes_requested" | "comment"
       demand_priority: "baixa" | "media" | "alta" | "urgente"
       demand_status: "pendente" | "em_andamento" | "revisao" | "finalizado"
       demand_type: "post" | "logo" | "banner" | "personalizado" | "outro"
@@ -1126,10 +1408,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      budget_status: ["rascunho", "enviado", "aprovado", "recusado"],
+      briefing_status: ["draft", "sent", "answered", "archived"],
+      budget_status: ["rascunho", "enviado", "aprovado", "recusado", "aceito"],
       client_status: ["lead", "ativo", "inativo"],
       client_type: ["cliente", "lead", "terceirizado", "parceiro"],
       close_potential: ["baixo", "medio", "alto"],
+      contract_status: ["draft", "sent", "signed", "cancelled"],
+      demand_feedback_action: ["approved", "changes_requested", "comment"],
       demand_priority: ["baixa", "media", "alta", "urgente"],
       demand_status: ["pendente", "em_andamento", "revisao", "finalizado"],
       demand_type: ["post", "logo", "banner", "personalizado", "outro"],
