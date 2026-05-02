@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WhatsAppDialog } from "@/components/whatsapp/WhatsAppDialog";
+import { PortalLinkDialog } from "@/components/portal/PortalLinkDialog";
 import type { Database } from "@/integrations/supabase/types";
 
 type ClientType = Database["public"]["Enums"]["client_type"];
@@ -382,6 +383,7 @@ export default function Clientes() {
                   <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); openEdit(detailClient); }}><Edit className="h-3.5 w-3.5 mr-1" />Editar</Button>
                   {detailClient.phone && <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); setWaClient(detailClient); }}><MessageCircle className="h-3.5 w-3.5 mr-1" />WhatsApp</Button>}
                   <Button size="sm" variant="outline" onClick={() => { setInteractionClientId(detailClient.id); setInteractionOpen(true); }}><Plus className="h-3.5 w-3.5 mr-1" />Interação</Button>
+                  <PortalLinkDialog clientId={detailClient.id} />
                 </div>
 
                 {/* Interactions history */}

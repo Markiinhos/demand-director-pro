@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard, Plug } from "lucide-react";
+import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard, Plug, FileSignature, ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -22,6 +22,8 @@ const navItems = [
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
   { title: "Cobranças", url: "/cobrancas", icon: CreditCard },
   { title: "Orçamentos", url: "/orcamentos", icon: FileText },
+  { title: "Briefings", url: "/briefings", icon: ClipboardList },
+  { title: "Contratos", url: "/contratos", icon: FileSignature },
   { title: "Calculadora", url: "/calculadora", icon: Calculator },
   { title: "Integrações", url: "/integracoes", icon: Plug },
 ];
