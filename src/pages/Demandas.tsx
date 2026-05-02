@@ -2,7 +2,8 @@ import { useDemands, Demand } from "@/hooks/useDemands";
 import { useClients } from "@/hooks/useClients";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, LayoutGrid, List, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, LayoutGrid, List, Edit, Trash2, Loader2, Layers } from "lucide-react";
+import { DemandVersionsDialog } from "@/components/demands/DemandVersionsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -126,6 +127,7 @@ export default function Demandas() {
                               {isOverdue && "⚠ "}{new Date(d.due_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
                             </span>
                             <div className="flex gap-1">
+                              <DemandVersionsDialog demandId={d.id} trigger={<button className="p-1 rounded hover:bg-muted" title="Versões"><Layers className="h-3 w-3" /></button>} />
                               <button onClick={() => openEdit(d)} className="p-1 rounded hover:bg-muted"><Edit className="h-3 w-3" /></button>
                               <button onClick={() => setDeleteId(d.id)} className="p-1 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-3 w-3" /></button>
                             </div>
@@ -169,6 +171,7 @@ export default function Demandas() {
                   <SelectContent>{columns.map(c => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
                 <div className="flex gap-1">
+                  <DemandVersionsDialog demandId={d.id} trigger={<button className="p-1 rounded hover:bg-muted" title="Versões"><Layers className="h-3.5 w-3.5" /></button>} />
                   <button onClick={() => openEdit(d)} className="p-1 rounded hover:bg-muted"><Edit className="h-3.5 w-3.5" /></button>
                   <button onClick={() => setDeleteId(d.id)} className="p-1 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
