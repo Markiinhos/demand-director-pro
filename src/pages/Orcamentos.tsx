@@ -21,6 +21,7 @@ const statusMap: Record<BudgetStatus, { label: string; variant: "default" | "sec
   enviado: { label: "Enviado", variant: "outline" },
   aprovado: { label: "Aprovado", variant: "default" },
   recusado: { label: "Recusado", variant: "destructive" },
+  aceito: { label: "Aceito", variant: "default" },
 };
 
 interface ItemForm { title: string; description: string; quantity: number; unit_price: number; }
