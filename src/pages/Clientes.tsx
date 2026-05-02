@@ -382,6 +382,7 @@ export default function Clientes() {
                   <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); openEdit(detailClient); }}><Edit className="h-3.5 w-3.5 mr-1" />Editar</Button>
                   {detailClient.phone && <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); setWaClient(detailClient); }}><MessageCircle className="h-3.5 w-3.5 mr-1" />WhatsApp</Button>}
                   <Button size="sm" variant="outline" onClick={() => { setInteractionClientId(detailClient.id); setInteractionOpen(true); }}><Plus className="h-3.5 w-3.5 mr-1" />Interação</Button>
+                  <PortalLinkDialog clientId={detailClient.id} />
                 </div>
 
                 {/* Interactions history */}
