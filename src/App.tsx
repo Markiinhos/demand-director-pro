@@ -18,6 +18,11 @@ import Orcamentos from "./pages/Orcamentos";
 import Calculadora from "./pages/Calculadora";
 import Cobrancas from "./pages/Cobrancas";
 import Integracoes from "./pages/Integracoes";
+import Briefings from "./pages/Briefings";
+import Contratos from "./pages/Contratos";
+import PortalCliente from "./pages/public/PortalCliente";
+import BriefingPublico from "./pages/public/BriefingPublico";
+import PropostaPublica from "./pages/public/PropostaPublica";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +37,9 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/portal/:token" element={<PortalCliente />} />
+            <Route path="/briefing/:token" element={<BriefingPublico />} />
+            <Route path="/proposta/:slug" element={<PropostaPublica />} />
             <Route
               path="/*"
               element={
@@ -48,6 +56,8 @@ const App = () => (
                       <Route path="/cobrancas" element={<Cobrancas />} />
                       <Route path="/calculadora" element={<Calculadora />} />
                       <Route path="/integracoes" element={<Integracoes />} />
+                      <Route path="/briefings" element={<Briefings />} />
+                      <Route path="/contratos" element={<Contratos />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </AppLayout>
