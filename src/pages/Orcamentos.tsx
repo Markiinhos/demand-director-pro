@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Database } from "@/integrations/supabase/types";
 import { exportBudgetPDF } from "@/lib/budgets/export-pdf";
+import { PublicProposalButton } from "@/components/budgets/PublicProposalButton";
 import { toast } from "sonner";
 
 type BudgetStatus = Database["public"]["Enums"]["budget_status"];
@@ -163,6 +164,7 @@ export default function Orcamentos() {
                 <Badge variant={st.variant}>{st.label}</Badge>
                 <div className="flex gap-1">
                   <button onClick={() => handleExportPDF(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Exportar PDF"><Download className="h-3.5 w-3.5" /></button>
+                  <PublicProposalButton budgetId={budget.id} currentSlug={(budget as any).public_slug ?? null} />
                   <button onClick={() => openEdit(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Editar"><Edit className="h-3.5 w-3.5" /></button>
                   <button onClick={() => duplicate.mutate(budget.id)} className="p-1.5 rounded hover:bg-muted" title="Duplicar"><Copy className="h-3.5 w-3.5" /></button>
                   <button onClick={() => setDeleteId(budget.id)} className="p-1.5 rounded hover:bg-destructive/10 text-destructive" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
