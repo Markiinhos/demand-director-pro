@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WhatsAppDialog } from "@/components/whatsapp/WhatsAppDialog";
+import { PortalLinkDialog } from "@/components/portal/PortalLinkDialog";
 import type { Database } from "@/integrations/supabase/types";
 
 type ClientType = Database["public"]["Enums"]["client_type"];
