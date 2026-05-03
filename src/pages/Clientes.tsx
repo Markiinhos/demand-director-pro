@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WhatsAppDialog } from "@/components/whatsapp/WhatsAppDialog";
 import { PortalLinkDialog } from "@/components/portal/PortalLinkDialog";
+import { ClientLogoUpload } from "@/components/clients/ClientLogoUpload";
 import type { Database } from "@/integrations/supabase/types";
 
 type ClientType = Database["public"]["Enums"]["client_type"];
@@ -82,6 +83,7 @@ const emptyForm = {
   instagram: "", specialty: "", service_provided: "",
   first_contact_at: "", next_action: "", next_action_date: "",
   sales_notes: "", close_potential: "" as string,
+  logo_url: null as string | null,
 };
 
 export default function Clientes() {
@@ -135,6 +137,7 @@ export default function Clientes() {
       next_action_date: c.next_action_date || "",
       sales_notes: c.sales_notes || "",
       close_potential: c.close_potential || "",
+      logo_url: (c as any).logo_url ?? null,
     });
     setOpen(true);
   };
@@ -160,6 +163,7 @@ export default function Clientes() {
       service_provided: form.service_provided || null,
       next_action: form.next_action || null,
       sales_notes: form.sales_notes || null,
+      logo_url: form.logo_url || null,
     };
     if (editingClient) {
       update.mutate({ id: editingClient.id, ...payload }, { onSuccess: () => setOpen(false) });
