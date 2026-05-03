@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Upload, Trash2, Download, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ export default function Contratos() {
   const [clientId, setClientId] = useState("");
   const [title, setTitle] = useState("");
   const [vars, setVars] = useState<Record<string, string>>({});
+  const [includeLogo, setIncludeLogo] = useState(true);
 
   const selectedTpl = useMemo(() => templates.find((t) => t.id === tplId), [templates, tplId]);
   const placeholders = (selectedTpl?.placeholders as string[] | undefined) ?? [];
@@ -38,8 +40,8 @@ export default function Contratos() {
 
   const submitGen = async () => {
     if (!tplId || !clientId || !title) return toast.error("Preencha todos os campos");
-    await generate.mutateAsync({ template_id: tplId, client_id: clientId, title, variables: vars });
-    setOpenGen(false); setTplId(""); setClientId(""); setTitle(""); setVars({});
+    await generate.mutateAsync({ template_id: tplId, client_id: clientId, title, variables: vars, include_logo: includeLogo });
+    setOpenGen(false); setTplId(""); setClientId(""); setTitle(""); setVars({}); setIncludeLogo(true);
   };
 
   const sendWhatsapp = (phone: string | null, url: string, title: string) => {
@@ -83,6 +85,10 @@ export default function Contratos() {
                   </Select>
                 </div>
                 <div><Label>Título do contrato</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox id="include-logo" checked={includeLogo} onCheckedChange={(v) => setIncludeLogo(v === true)} />
+                  <Label htmlFor="include-logo" className="text-sm cursor-pointer">Incluir logo do cliente no PDF</Label>
+                </div>
                 {placeholders.length > 0 && (
                   <div className="space-y-2 border-t pt-3">
                     <Label className="text-sm">Preencher variáveis</Label>
