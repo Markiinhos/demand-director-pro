@@ -1,11 +1,13 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Budget, BudgetItem } from "@/hooks/useBudgets";
+import { detectImageFormat } from "@/lib/imageToDataUrl";
 
 interface ExportData {
   budget: Budget;
   items: BudgetItem[];
   clientName: string;
+  clientLogoDataUrl?: string | null;
 }
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -18,10 +20,18 @@ const statusLabels: Record<string, string> = {
   recusado: "Recusado",
 };
 
-export function exportBudgetPDF({ budget, items, clientName }: ExportData) {
+export function exportBudgetPDF({ budget, items, clientName, clientLogoDataUrl }: ExportData) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 20;
+
+  // Optional client logo (top-right)
+  if (clientLogoDataUrl) {
+    try {
+      const fmt = detectImageFormat(clientLogoDataUrl);
+      doc.addImage(clientLogoDataUrl, fmt, pageWidth - 44, 10, 30, 18, undefined, "FAST");
+    } catch { /* ignore */ }
+  }
 
   // Header
   doc.setFontSize(20);

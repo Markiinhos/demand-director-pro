@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
+import { urlToDataUrl, detectImageFormat } from "@/lib/imageToDataUrl";
 
 function extractPlaceholders(text: string): string[] {
   const set = new Set<string>();
@@ -101,10 +102,18 @@ export function useContracts() {
   });
 
   const generate = useMutation({
-    mutationFn: async (input: { template_id: string; client_id: string; title: string; variables: Record<string, string>; budget_id?: string | null }) => {
+    mutationFn: async (input: { template_id: string; client_id: string; title: string; variables: Record<string, string>; budget_id?: string | null; include_logo?: boolean }) => {
       if (!user) throw new Error("Não autenticado");
       const { data: tpl, error: tErr } = await supabase.from("contract_templates").select("*").eq("id", input.template_id).single();
       if (tErr) throw tErr;
+
+      // Buscar logo do cliente (opcional)
+      let logoDataUrl: string | null = null;
+      if (input.include_logo) {
+        const { data: client } = await supabase.from("clients").select("logo_url").eq("id", input.client_id).single();
+        const url = (client as any)?.logo_url as string | undefined;
+        if (url) logoDataUrl = await urlToDataUrl(url);
+      }
 
       // Carregar texto do modelo
       const fileResp = await fetch(tpl.file_url);
@@ -123,11 +132,19 @@ export function useContracts() {
       const lineHeight = 6;
       const margin = 20;
       const maxWidth = 170;
+      let y = margin;
+      if (logoDataUrl) {
+        try {
+          const fmt = detectImageFormat(logoDataUrl);
+          pdf.addImage(logoDataUrl, fmt, margin, y, 30, 18, undefined, "FAST");
+          y += 22;
+        } catch { /* ignore */ }
+      }
       pdf.setFontSize(14);
-      pdf.text(input.title, margin, margin);
+      pdf.text(input.title, margin, y);
+      y += 10;
       pdf.setFontSize(11);
       const lines = pdf.splitTextToSize(filled, maxWidth);
-      let y = margin + 12;
       for (const line of lines) {
         if (y > 280) { pdf.addPage(); y = margin; }
         pdf.text(line, margin, y);
