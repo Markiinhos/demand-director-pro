@@ -331,6 +331,7 @@ export type Database = {
           last_interaction_at: string | null
           lead_source: string | null
           lead_stage: Database["public"]["Enums"]["lead_stage"] | null
+          logo_url: string | null
           name: string
           next_action: string | null
           next_action_date: string | null
@@ -360,6 +361,7 @@ export type Database = {
           last_interaction_at?: string | null
           lead_source?: string | null
           lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          logo_url?: string | null
           name: string
           next_action?: string | null
           next_action_date?: string | null
@@ -389,6 +391,7 @@ export type Database = {
           last_interaction_at?: string | null
           lead_source?: string | null
           lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          logo_url?: string | null
           name?: string
           next_action?: string | null
           next_action_date?: string | null
