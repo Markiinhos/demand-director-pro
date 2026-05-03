@@ -502,6 +502,8 @@ export default function Clientes() {
             <div><Label>Notas Comerciais</Label><Textarea value={form.sales_notes} onChange={e => setForm(f => ({ ...f, sales_notes: e.target.value }))} /></div>
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
 
+            <ClientLogoUpload value={form.logo_url} onChange={(url) => setForm(f => ({ ...f, logo_url: url }))} />
+
             <Button onClick={handleSubmit} className="w-full" disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
               {editingClient ? "Salvar" : "Cadastrar"}
