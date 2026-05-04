@@ -1,1 +1,4 @@
 project_id = "lwabrwtqwveqrkwegikg"
+
+[functions.public-portal]
+verify_jwt = false
