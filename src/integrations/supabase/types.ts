@@ -850,6 +850,45 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          message: string | null
+          read: boolean
+          related_entity_id: string | null
+          related_entity_type: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          read?: boolean
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          title: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          read?: boolean
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_charges: {
         Row: {
           amount: number
@@ -1275,6 +1314,7 @@ export type Database = {
         | "aprovado"
         | "perdido"
         | "inativo"
+      notification_type: "info" | "success" | "warning" | "error"
       profile_role: "admin" | "designer" | "financeiro"
       project_status:
         | "briefing"
@@ -1443,6 +1483,7 @@ export const Constants = {
         "perdido",
         "inativo",
       ],
+      notification_type: ["info", "success", "warning", "error"],
       profile_role: ["admin", "designer", "financeiro"],
       project_status: [
         "briefing",
