@@ -1091,6 +1091,51 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          features: Json
+          id: string
+          interval: string
+          is_active: boolean
+          max_clients: number | null
+          max_demands_per_month: number | null
+          mp_preapproval_plan_id: string | null
+          name: string
+          price_brl: number
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          features?: Json
+          id: string
+          interval?: string
+          is_active?: boolean
+          max_clients?: number | null
+          max_demands_per_month?: number | null
+          mp_preapproval_plan_id?: string | null
+          name: string
+          price_brl?: number
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          interval?: string
+          is_active?: boolean
+          max_clients?: number | null
+          max_demands_per_month?: number | null
+          mp_preapproval_plan_id?: string | null
+          name?: string
+          price_brl?: number
+          sort_order?: number
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           created_at: string
@@ -1144,6 +1189,86 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_onboarding: {
+        Row: {
+          completed: boolean
+          created_at: string
+          current_step: number
+          dismissed_at: string | null
+          steps_done: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          current_step?: number
+          dismissed_at?: string | null
+          steps_done?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          current_step?: number
+          dismissed_at?: string | null
+          steps_done?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          mp_preapproval_id: string | null
+          plan_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          mp_preapproval_id?: string | null
+          plan_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          mp_preapproval_id?: string | null
+          plan_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -1322,6 +1447,12 @@ export type Database = {
         | "revisao"
         | "entrega"
         | "concluido"
+      subscription_status:
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "paused"
       task_priority: "baixa" | "media" | "alta"
       task_status: "pendente" | "fazendo" | "concluida"
     }
@@ -1491,6 +1622,13 @@ export const Constants = {
         "revisao",
         "entrega",
         "concluido",
+      ],
+      subscription_status: [
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "paused",
       ],
       task_priority: ["baixa", "media", "alta"],
       task_status: ["pendente", "fazendo", "concluida"],
