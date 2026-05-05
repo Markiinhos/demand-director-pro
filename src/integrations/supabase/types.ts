@@ -1273,6 +1273,54 @@ export type Database = {
           },
         ]
       }
+      whatsapp_connections: {
+        Row: {
+          access_token_encrypted: string | null
+          business_account_id: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          metadata: Json
+          phone_number: string | null
+          phone_number_id: string
+          provider: string
+          status: string
+          updated_at: string
+          user_id: string
+          webhook_verify_token: string | null
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          metadata?: Json
+          phone_number?: string | null
+          phone_number_id: string
+          provider?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          webhook_verify_token?: string | null
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          metadata?: Json
+          phone_number?: string | null
+          phone_number_id?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          webhook_verify_token?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_logs: {
         Row: {
           created_at: string
@@ -1312,6 +1360,7 @@ export type Database = {
           direction: string
           error_message: string | null
           id: string
+          media_url: string | null
           message_type: string
           metadata: Json | null
           related_entity_id: string | null
@@ -1330,6 +1379,7 @@ export type Database = {
           direction: string
           error_message?: string | null
           id?: string
+          media_url?: string | null
           message_type: string
           metadata?: Json | null
           related_entity_id?: string | null
@@ -1348,6 +1398,7 @@ export type Database = {
           direction?: string
           error_message?: string | null
           id?: string
+          media_url?: string | null
           message_type?: string
           metadata?: Json | null
           related_entity_id?: string | null
@@ -1372,6 +1423,7 @@ export type Database = {
           updated_at: string
           user_id: string
           variables_schema: Json | null
+          whatsapp_connection_id: string | null
         }
         Insert: {
           category?: string | null
@@ -1384,6 +1436,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           variables_schema?: Json | null
+          whatsapp_connection_id?: string | null
         }
         Update: {
           category?: string | null
@@ -1396,6 +1449,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           variables_schema?: Json | null
+          whatsapp_connection_id?: string | null
         }
         Relationships: []
       }
