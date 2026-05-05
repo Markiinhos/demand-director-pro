@@ -39,7 +39,17 @@ export function useClients() {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("Cliente criado com sucesso");
     },
-    onError: (e) => toast.error("Erro ao criar cliente: " + e.message),
+    onError: (e: any) => {
+      const msg = String(e?.message ?? "");
+      if (msg.includes("PLAN_LIMIT_CLIENTS")) {
+        toast.error("Limite do plano atingido", {
+          description: msg.split("PLAN_LIMIT_CLIENTS:")[1]?.trim() ?? "Faça upgrade para Pro.",
+          action: { label: "Ver planos", onClick: () => (window.location.href = "/planos") },
+        });
+      } else {
+        toast.error("Erro ao criar cliente: " + msg);
+      }
+    },
   });
 
   const update = useMutation({
