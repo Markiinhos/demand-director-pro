@@ -1273,54 +1273,6 @@ export type Database = {
           },
         ]
       }
-      whatsapp_connections: {
-        Row: {
-          id: string
-          user_id: string
-          provider: string
-          business_account_id: string | null
-          phone_number_id: string
-          phone_number: string | null
-          display_name: string | null
-          access_token_encrypted: string
-          webhook_verify_token: string
-          status: string
-          metadata: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          provider?: string
-          business_account_id?: string | null
-          phone_number_id: string
-          phone_number?: string | null
-          display_name?: string | null
-          access_token_encrypted: string
-          webhook_verify_token?: string
-          status?: string
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          provider?: string
-          business_account_id?: string | null
-          phone_number_id?: string
-          phone_number?: string | null
-          display_name?: string | null
-          access_token_encrypted?: string
-          webhook_verify_token?: string
-          status?: string
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       whatsapp_logs: {
         Row: {
           created_at: string
@@ -1360,7 +1312,6 @@ export type Database = {
           direction: string
           error_message: string | null
           id: string
-          media_url: string | null
           message_type: string
           metadata: Json | null
           related_entity_id: string | null
@@ -1370,7 +1321,6 @@ export type Database = {
           updated_at: string
           user_id: string
           wa_message_id: string | null
-          whatsapp_connection_id: string | null
         }
         Insert: {
           client_id: string
@@ -1380,7 +1330,6 @@ export type Database = {
           direction: string
           error_message?: string | null
           id?: string
-          media_url?: string | null
           message_type: string
           metadata?: Json | null
           related_entity_id?: string | null
@@ -1390,7 +1339,6 @@ export type Database = {
           updated_at?: string
           user_id: string
           wa_message_id?: string | null
-          whatsapp_connection_id?: string | null
         }
         Update: {
           client_id?: string
@@ -1400,7 +1348,6 @@ export type Database = {
           direction?: string
           error_message?: string | null
           id?: string
-          media_url?: string | null
           message_type?: string
           metadata?: Json | null
           related_entity_id?: string | null
@@ -1410,7 +1357,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           wa_message_id?: string | null
-          whatsapp_connection_id?: string | null
         }
         Relationships: []
       }
@@ -1426,7 +1372,6 @@ export type Database = {
           updated_at: string
           user_id: string
           variables_schema: Json | null
-          whatsapp_connection_id: string | null
         }
         Insert: {
           category?: string | null
@@ -1439,7 +1384,6 @@ export type Database = {
           updated_at?: string
           user_id: string
           variables_schema?: Json | null
-          whatsapp_connection_id?: string | null
         }
         Update: {
           category?: string | null
@@ -1452,7 +1396,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           variables_schema?: Json | null
-          whatsapp_connection_id?: string | null
         }
         Relationships: []
       }
