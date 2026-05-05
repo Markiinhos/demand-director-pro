@@ -1,10 +1,14 @@
 import { useMpConnection } from "@/hooks/useMpConnection";
+import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Loader2, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
+import { CreditCard, Loader2, CheckCircle2, AlertCircle, MessageSquare, ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function Integracoes() {
   const { status, connect, disconnect } = useMpConnection();
+  const { isConnected, connection, isLoading: waLoading } = useWhatsAppConnection();
+  const navigate = useNavigate();
   const s = status.data;
 
   return (
@@ -14,6 +18,7 @@ export default function Integracoes() {
         <p className="text-muted-foreground text-sm">Conecte serviços externos à sua conta.</p>
       </div>
 
+      {/* Mercado Pago */}
       <div className="bg-card border border-border/50 rounded-xl p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -72,16 +77,47 @@ export default function Integracoes() {
         </div>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-xl p-5 opacity-60">
-        <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-            <MessageSquare className="h-5 w-5 text-muted-foreground" />
+      {/* WhatsApp Business */}
+      <div
+        className="bg-card border border-border/50 rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer"
+        onClick={() => navigate("/whatsapp")}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <MessageSquare className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold flex items-center gap-2">
+                WhatsApp Business
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Conecte seu WhatsApp Business para enviar mensagens, cobranças, contratos e propostas automaticamente.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold flex items-center gap-2">WhatsApp Business <Badge variant="secondary" className="text-[10px]">em breve</Badge></h2>
-            <p className="text-sm text-muted-foreground">Cada usuário conecta o próprio número e envia mensagens, contratos e cobranças.</p>
+          <div className="flex items-center gap-2 shrink-0">
+            {waLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : isConnected ? (
+              <Badge variant="outline" className="gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                <CheckCircle2 className="h-3 w-3" />Conectado
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <AlertCircle className="h-3 w-3" />Não conectado
+              </Badge>
+            )}
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </div>
+
+        {isConnected && connection && (
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="font-mono">{connection.phone_number || connection.phone_number_id}</span>
+            {connection.display_name && <span>• {connection.display_name}</span>}
+          </div>
+        )}
       </div>
     </div>
   );

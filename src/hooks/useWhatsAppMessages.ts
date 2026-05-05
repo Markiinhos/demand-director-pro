@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export type WhatsAppMessage = Tables<"whatsapp_messages">;
 
@@ -16,7 +17,7 @@ export function useWhatsAppMessages(clientId?: string) {
       let q = supabase
         .from("whatsapp_messages")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
       if (clientId) q = q.eq("client_id", clientId);
       const { data, error } = await q;
       if (error) throw error;
@@ -25,6 +26,31 @@ export function useWhatsAppMessages(clientId?: string) {
     enabled: !!user,
   });
 
+  // Realtime subscription for live updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("whatsapp_messages_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "whatsapp_messages",
+          filter: clientId ? `client_id=eq.${clientId}` : undefined,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["whatsapp_messages", clientId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, clientId, queryClient]);
+
   const sendMessage = useMutation({
     mutationFn: async (input: {
       clientId: string;
@@ -32,19 +58,31 @@ export function useWhatsAppMessages(clientId?: string) {
       phone: string;
       messageType?: string;
       templateName?: string;
+      mediaUrl?: string;
       relatedEntityType?: string;
       relatedEntityId?: string;
     }) => {
+      // First, get the user's WhatsApp connection
+      const { data: conn } = await supabase
+        .from("whatsapp_connections")
+        .select("id")
+        .eq("user_id", user!.id)
+        .eq("status", "connected")
+        .limit(1)
+        .maybeSingle();
+
       // Save message as queued
       const { data, error } = await supabase
         .from("whatsapp_messages")
         .insert({
           user_id: user!.id,
           client_id: input.clientId,
+          whatsapp_connection_id: conn?.id || null,
           direction: "outbound",
           message_type: input.messageType || "text",
           template_name: input.templateName || null,
           content: input.content,
+          media_url: input.mediaUrl || null,
           status: "queued",
           related_entity_type: input.relatedEntityType || null,
           related_entity_id: input.relatedEntityId || null,
@@ -62,6 +100,7 @@ export function useWhatsAppMessages(clientId?: string) {
             content: input.content,
             messageType: input.messageType || "text",
             templateName: input.templateName,
+            mediaUrl: input.mediaUrl,
           },
         });
         if (fnError) {
@@ -89,5 +128,55 @@ export function useWhatsAppMessages(clientId?: string) {
     onError: (e) => toast.error("Erro ao enviar: " + e.message),
   });
 
-  return { messages: query.data ?? [], isLoading: query.isLoading, sendMessage };
+  const sendTemplateMessage = useMutation({
+    mutationFn: async (input: {
+      clientId: string;
+      phone: string;
+      templateName: string;
+      templateKey: string;
+      variables?: Record<string, string>;
+      relatedEntityType?: string;
+      relatedEntityId?: string;
+    }) => {
+      const content = `[Template: ${input.templateName}]`;
+      return sendMessage.mutateAsync({
+        clientId: input.clientId,
+        phone: input.phone,
+        content,
+        messageType: "template",
+        templateName: input.templateKey,
+        relatedEntityType: input.relatedEntityType,
+        relatedEntityId: input.relatedEntityId,
+      });
+    },
+  });
+
+  const sendDocument = useMutation({
+    mutationFn: async (input: {
+      clientId: string;
+      phone: string;
+      documentUrl: string;
+      caption: string;
+      relatedEntityType?: string;
+      relatedEntityId?: string;
+    }) => {
+      return sendMessage.mutateAsync({
+        clientId: input.clientId,
+        phone: input.phone,
+        content: input.caption,
+        messageType: "document",
+        mediaUrl: input.documentUrl,
+        relatedEntityType: input.relatedEntityType,
+        relatedEntityId: input.relatedEntityId,
+      });
+    },
+  });
+
+  return {
+    messages: query.data ?? [],
+    isLoading: query.isLoading,
+    sendMessage,
+    sendTemplateMessage,
+    sendDocument,
+  };
 }

@@ -21,6 +21,7 @@ import Integracoes from "./pages/Integracoes";
 import Briefings from "./pages/Briefings";
 import Contratos from "./pages/Contratos";
 import Planos from "./pages/Planos";
+import WhatsApp from "./pages/WhatsApp";
 import { OnboardingDialog } from "@/components/onboarding/OnboardingDialog";
 import PortalCliente from "./pages/public/PortalCliente";
 import BriefingPublico from "./pages/public/BriefingPublico";
@@ -61,6 +62,7 @@ const App = () => (
                       <Route path="/briefings" element={<Briefings />} />
                       <Route path="/contratos" element={<Contratos />} />
                       <Route path="/planos" element={<Planos />} />
+                      <Route path="/whatsapp" element={<WhatsApp />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <OnboardingDialog />

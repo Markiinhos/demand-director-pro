@@ -19,36 +19,50 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const supabase = createClient(
+    const supabaseAuth = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: authError } = await supabase.auth.getClaims(token);
-    if (authError || !claims?.claims) {
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    const { messageId, phone, content, messageType, templateName } = await req.json();
+    // Service role client for privileged operations
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { messageId, phone, content, messageType, templateName, mediaUrl } = await req.json();
 
     if (!messageId || !phone || !content) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: corsHeaders });
     }
 
-    const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-    const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+    // MULTI-TENANT: Get user's WhatsApp connection
+    const { data: connection, error: connError } = await supabase
+      .from("whatsapp_connections")
+      .select("id, phone_number_id, access_token_encrypted, status")
+      .eq("user_id", user.id)
+      .eq("status", "connected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!accessToken || !phoneNumberId) {
-      // Update message status
+    if (connError || !connection) {
       await supabase.from("whatsapp_messages").update({
         status: "failed",
-        error_message: "WhatsApp API não configurada. Configure WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID.",
+        error_message: "Nenhuma conexão WhatsApp ativa. Vá em Integrações > WhatsApp para configurar.",
       }).eq("id", messageId);
 
-      return new Response(JSON.stringify({ error: "WhatsApp API not configured" }), { status: 503, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "No WhatsApp connection found" }), { status: 503, headers: corsHeaders });
     }
+
+    const accessToken = connection.access_token_encrypted;
+    const phoneNumberId = connection.phone_number_id;
 
     // Format phone
     const formattedPhone = phone.replace(/\D/g, "");
@@ -61,6 +75,24 @@ Deno.serve(async (req) => {
         to: formattedPhone,
         type: "template",
         template: { name: templateName, language: { code: "pt_BR" } },
+      };
+    } else if (messageType === "document" && mediaUrl) {
+      waPayload = {
+        messaging_product: "whatsapp",
+        to: formattedPhone,
+        type: "document",
+        document: {
+          link: mediaUrl,
+          caption: content,
+          filename: mediaUrl.split("/").pop() || "documento.pdf",
+        },
+      };
+    } else if (messageType === "image" && mediaUrl) {
+      waPayload = {
+        messaging_product: "whatsapp",
+        to: formattedPhone,
+        type: "image",
+        image: { link: mediaUrl, caption: content },
       };
     } else {
       waPayload = {
@@ -89,6 +121,14 @@ Deno.serve(async (req) => {
         error_message: errorMsg,
       }).eq("id", messageId);
 
+      // If token error, mark connection as error
+      if (waResponse.status === 401 || waResponse.status === 403) {
+        await supabase.from("whatsapp_connections").update({
+          status: "error",
+          metadata: { last_error: errorMsg, error_at: new Date().toISOString() },
+        }).eq("id", connection.id);
+      }
+
       return new Response(JSON.stringify({ error: errorMsg }), { status: 400, headers: corsHeaders });
     }
 
@@ -97,6 +137,7 @@ Deno.serve(async (req) => {
     await supabase.from("whatsapp_messages").update({
       status: "sent",
       wa_message_id: waMessageId,
+      whatsapp_connection_id: connection.id,
     }).eq("id", messageId);
 
     return new Response(JSON.stringify({ success: true, wa_message_id: waMessageId }), {
