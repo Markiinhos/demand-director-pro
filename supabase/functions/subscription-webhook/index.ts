@@ -2,6 +2,39 @@
 // Configure no painel MP: URL = .../functions/v1/subscription-webhook  topic=preapproval
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
+// Valida assinatura do webhook MP usando MERCADO_PAGO_WEBHOOK_SECRET.
+// Doc: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
+async function validateMpSignature(req: Request, rawBody: string): Promise<boolean> {
+  const secret = Deno.env.get("MERCADO_PAGO_WEBHOOK_SECRET");
+  if (!secret) return true; // sem secret configurado → não bloqueia (modo legado)
+  const xSignature = req.headers.get("x-signature") ?? "";
+  const xRequestId = req.headers.get("x-request-id") ?? "";
+  const url = new URL(req.url);
+  const dataId = url.searchParams.get("data.id") ?? url.searchParams.get("id") ?? "";
+  if (!xSignature) return false;
+
+  const parts = Object.fromEntries(
+    xSignature.split(",").map((p) => p.trim().split("=").map((s) => s.trim()))
+  ) as Record<string, string>;
+  const ts = parts.ts;
+  const v1 = parts.v1;
+  if (!ts || !v1) return false;
+
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest));
+  const expected = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return expected === v1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204 });
 
@@ -11,12 +44,19 @@ Deno.serve(async (req) => {
     const mpToken = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
     const admin = createClient(supabaseUrl, serviceKey);
 
+    const rawBody = await req.text();
+    const valid = await validateMpSignature(req, rawBody);
+    if (!valid) {
+      console.warn("Invalid MP webhook signature");
+      return new Response(JSON.stringify({ error: "invalid_signature" }), { status: 401 });
+    }
+
     const url = new URL(req.url);
     const topic = url.searchParams.get("type") ?? url.searchParams.get("topic") ?? "";
     const id = url.searchParams.get("id") ?? url.searchParams.get("data.id") ?? "";
 
     let body: any = null;
-    try { body = await req.json(); } catch { /* ignore */ }
+    try { body = rawBody ? JSON.parse(rawBody) : null; } catch { /* ignore */ }
     const preapprovalId = body?.data?.id ?? id;
 
     if (!topic.includes("preapproval") || !preapprovalId || !mpToken) {
