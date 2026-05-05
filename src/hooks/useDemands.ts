@@ -39,7 +39,17 @@ export function useDemands() {
       queryClient.invalidateQueries({ queryKey: ["demands"] });
       toast.success("Demanda criada com sucesso");
     },
-    onError: (e) => toast.error("Erro ao criar demanda: " + e.message),
+    onError: (e: any) => {
+      const msg = String(e?.message ?? "");
+      if (msg.includes("PLAN_LIMIT_DEMANDS")) {
+        toast.error("Limite do plano atingido", {
+          description: msg.split("PLAN_LIMIT_DEMANDS:")[1]?.trim() ?? "Faça upgrade para Pro.",
+          action: { label: "Ver planos", onClick: () => (window.location.href = "/planos") },
+        });
+      } else {
+        toast.error("Erro ao criar demanda: " + msg);
+      }
+    },
   });
 
   const update = useMutation({
