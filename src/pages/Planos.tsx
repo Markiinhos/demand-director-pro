@@ -1,16 +1,21 @@
-import { Check, Loader2, Crown } from "lucide-react";
+import { Check, Loader2, Crown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { usePlans, useMySubscription } from "@/hooks/useSubscription";
 import { toast } from "@/hooks/use-toast";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Planos() {
   const { data: plans, isLoading } = usePlans();
-  const { subscription, subscribe } = useMySubscription();
+  const { subscription, subscribe, cancel } = useMySubscription();
   const [params, setParams] = useSearchParams();
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
     if (params.get("status") === "success") {
@@ -33,6 +38,16 @@ export default function Planos() {
     }
   };
 
+  const handleCancel = async () => {
+    try {
+      await cancel.mutateAsync();
+      toast({ title: "Assinatura cancelada", description: "Você voltou ao plano Free." });
+      setConfirmCancel(false);
+    } catch (e: any) {
+      toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center p-12"><Loader2 className="animate-spin" /></div>;
   }
@@ -50,6 +65,7 @@ export default function Planos() {
         {plans?.map((plan) => {
           const isCurrent = subscription?.plan_id === plan.id;
           const isPro = plan.id === "pro";
+          const isPaidActive = isCurrent && Number(plan.price_brl) > 0 && subscription?.status !== "canceled";
           return (
             <Card key={plan.id} className={isPro ? "border-primary shadow-lg relative" : ""}>
               {isPro && (
@@ -88,11 +104,44 @@ export default function Planos() {
                   {subscribe.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   {isCurrent ? "Plano atual" : isPro ? "Assinar Pro" : "Usar Free"}
                 </Button>
+                {isPaidActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground hover:text-destructive"
+                    onClick={() => setConfirmCancel(true)}
+                  >
+                    <X className="h-3 w-3 mr-1" /> Cancelar assinatura
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar assinatura Pro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você voltará ao plano Free imediatamente e perderá acesso aos recursos Pro
+              (clientes/demandas ilimitadas, integrações avançadas). Pode reativar quando quiser.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter Pro</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancel}
+              disabled={cancel.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancel.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Sim, cancelar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
