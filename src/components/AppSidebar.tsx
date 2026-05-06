@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard, Plug, FileSignature, ClipboardList, Crown, MessageCircle } from "lucide-react";
+import { LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut, Calculator, CalendarDays, Clock, CreditCard, Plug, FileSignature, ClipboardList, Crown, MessageCircle, UserCog } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -28,6 +28,7 @@ const navItems = [
   { title: "Integrações", url: "/integracoes", icon: Plug },
   { title: "WhatsApp", url: "/whatsapp", icon: MessageCircle },
   { title: "Planos", url: "/planos", icon: Crown },
+  { title: "Perfil", url: "/perfil", icon: UserCog },
 ];
 
 export function AppSidebar() {
