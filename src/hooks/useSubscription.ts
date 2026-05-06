@@ -72,5 +72,14 @@ export function useMySubscription() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["user_subscription", user?.id] }),
   });
 
-  return { ...query, subscription: query.data, subscribe };
+  const cancel = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("subscription-cancel", {});
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["user_subscription", user?.id] }),
+  });
+
+  return { ...query, subscription: query.data, subscribe, cancel };
 }
