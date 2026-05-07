@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Secrets ──────────────────────────────────────────
-    const META_APP_ID = Deno.env.get("META_APP_ID");
+    const META_APP_ID = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID");
     const META_APP_SECRET = Deno.env.get("META_APP_SECRET");
 
     if (!META_APP_ID || !META_APP_SECRET) {
