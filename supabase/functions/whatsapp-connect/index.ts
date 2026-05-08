@@ -172,47 +172,72 @@ Deno.serve(async (req) => {
     }
 
     // ── Step 1: Exchange code for Business Access Token ──
+    // Meta Embedded Signup docs: exchange code WITHOUT redirect_uri
+    // https://developers.facebook.com/docs/whatsapp/embedded-signup
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
       codeLength: code.length,
       codePrefix: code.substring(0, 10) + "...",
+      codeSuffix: "..." + code.substring(code.length - 10),
       wabaId: wabaId || "(not provided)",
       phoneNumberId: phoneNumberId || "(not provided)",
+      redirectUri: redirectUri || "(not provided)",
+      META_APP_ID_used: META_APP_ID.substring(0, 6) + "...",
+      META_APP_SECRET_present: Boolean(META_APP_SECRET),
+      META_APP_SECRET_length: META_APP_SECRET.length,
     });
 
-    let tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    // Strategy: try without redirect_uri first (per Meta docs),
+    // then with empty redirect_uri, then with page URL as fallback
+    const baseUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    
+    const strategies = [
+      { name: "no redirect_uri", url: baseUrl },
+      { name: "empty redirect_uri", url: `${baseUrl}&redirect_uri=` },
+    ];
+    
+    // If client sent a redirectUri, also try that
     if (redirectUri) {
-      tokenUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-      console.log("[whatsapp-connect] Including redirect_uri:", redirectUri);
+      strategies.push({ name: `redirect_uri=${redirectUri}`, url: `${baseUrl}&redirect_uri=${encodeURIComponent(redirectUri)}` });
     }
-    const tokenRes = await fetch(tokenUrl);
-    const tokenData = await tokenRes.json();
 
-    if (!tokenRes.ok || !tokenData.access_token) {
-      const errMsg = tokenData?.error?.message || "Falha ao trocar código por token.";
-      const errType = tokenData?.error?.type || "unknown";
-      const errCode = tokenData?.error?.code || 0;
-      console.error("[whatsapp-connect] ❌ Token exchange FAILED:", JSON.stringify(tokenData));
-      console.error("[whatsapp-connect]    HTTP status:", tokenRes.status);
-      console.error("[whatsapp-connect]    Error type:", errType, "| code:", errCode);
+    let tokenData: Record<string, unknown> | null = null;
+    let lastError = "";
+
+    for (const strategy of strategies) {
+      console.log(`[whatsapp-connect] Trying token exchange strategy: "${strategy.name}"`);
+      const tokenRes = await fetch(strategy.url);
+      const data = await tokenRes.json();
+      
+      if (tokenRes.ok && data.access_token) {
+        console.log(`[whatsapp-connect] ✅ Strategy "${strategy.name}" SUCCEEDED! Token length:`, data.access_token.length);
+        tokenData = data;
+        break;
+      } else {
+        const errMsg = data?.error?.message || "Unknown error";
+        console.warn(`[whatsapp-connect] ⚠ Strategy "${strategy.name}" failed:`, errMsg);
+        lastError = errMsg;
+      }
+    }
+
+    if (!tokenData?.access_token) {
+      console.error("[whatsapp-connect] ❌ ALL token exchange strategies FAILED. Last error:", lastError);
 
       try {
         await supabase.from("whatsapp_logs").insert({
           event_type: "embedded_signup_token_error",
           user_id: user.id,
-          payload: tokenData,
-          error_message: errMsg,
+          payload: { lastError, strategiesAttempted: strategies.map(s => s.name) },
+          error_message: lastError,
         });
       } catch (logErr) {
         console.error("[whatsapp-connect] Failed to log error to DB:", logErr);
       }
 
-      return jsonError(`Token exchange falhou: ${errMsg}`, {
-        fbErrorType: errType,
-        fbErrorCode: errCode,
-        tokenHttpStatus: tokenRes.status,
+      return jsonError(`Token exchange falhou: ${lastError}`, {
+        strategiesAttempted: strategies.map(s => s.name),
       });
     }
-    console.log("[whatsapp-connect] ✅ Token exchange SUCCESS, token length:", tokenData.access_token.length);
+    console.log("[whatsapp-connect] ✅ Token exchange SUCCESS, token length:", (tokenData.access_token as string).length);
 
     const accessToken = tokenData.access_token;
 
