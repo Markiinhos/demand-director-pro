@@ -186,20 +186,6 @@ export function WhatsAppConnectionCard() {
     }, loginOptions);
   }, [activeMetaConfigId, connectViaEmbeddedSignup]);
 
-  // ── Manual Connect ─────────────────────────────────────
-  const handleManualConnect = () => {
-    if (!manualForm.phoneNumberId.trim() || !manualForm.accessToken.trim()) {
-      toast.error("Phone Number ID e Access Token são obrigatórios.");
-      return;
-    }
-    connectManual.mutate(manualForm, {
-      onSuccess: () => {
-        setAdvancedOpen(false);
-        setManualForm({ phoneNumberId: "", businessAccountId: "", phoneNumber: "", displayName: "", accessToken: "" });
-      },
-    });
-  };
-
   const copyWebhookToken = () => {
     if (connection?.webhook_verify_token) {
       navigator.clipboard.writeText(connection.webhook_verify_token);
@@ -436,87 +422,6 @@ export function WhatsAppConnectionCard() {
         )}
       </div>
 
-      {/* ════ Advanced / Manual Mode ════ */}
-      {!isConnected && (
-        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-1">
-              <Wrench className="h-3 w-3" />
-              <span>Modo avançado (configuração manual)</span>
-              <ChevronDown className={`h-3 w-3 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="bg-card border border-border/50 rounded-xl p-5 space-y-4 mt-2">
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-700">
-                <strong>Atenção:</strong> Este modo é para desenvolvedores e situações onde o Embedded Signup não está disponível.
-                Use apenas se você tem os dados técnicos da API da Meta.
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-xs">Phone Number ID *</Label>
-                  <Input
-                    value={manualForm.phoneNumberId}
-                    onChange={e => setManualForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-                    placeholder="Ex: 123456789012345"
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Access Token Permanente *</Label>
-                  <Input
-                    type="password"
-                    value={manualForm.accessToken}
-                    onChange={e => setManualForm(f => ({ ...f, accessToken: e.target.value }))}
-                    placeholder="Token de acesso..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">WABA ID</Label>
-                    <Input
-                      value={manualForm.businessAccountId}
-                      onChange={e => setManualForm(f => ({ ...f, businessAccountId: e.target.value }))}
-                      placeholder="Opcional"
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Número WhatsApp</Label>
-                    <Input
-                      value={manualForm.phoneNumber}
-                      onChange={e => setManualForm(f => ({ ...f, phoneNumber: e.target.value }))}
-                      placeholder="5511999887766"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Nome de Exibição</Label>
-                  <Input
-                    value={manualForm.displayName}
-                    onChange={e => setManualForm(f => ({ ...f, displayName: e.target.value }))}
-                    placeholder="Minha Empresa"
-                  />
-                </div>
-              </div>
-
-              <Button
-                onClick={handleManualConnect}
-                className="w-full"
-                variant="outline"
-                disabled={connectManual.isPending}
-              >
-                {connectManual.isPending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Conectando...</>
-                ) : (
-                  <><CheckCircle2 className="h-4 w-4 mr-1.5" />Conectar Manualmente</>
-                )}
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
     </div>
   );
 }
