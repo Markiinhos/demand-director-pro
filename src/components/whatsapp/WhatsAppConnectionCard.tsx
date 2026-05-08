@@ -1,15 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   MessageSquare, CheckCircle2, AlertCircle, Loader2, Unlink,
-  RefreshCw, Phone, Send, ShieldCheck, ChevronDown, Wrench, Copy,
+  RefreshCw, Phone, Send, ShieldCheck, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -85,19 +80,11 @@ export function WhatsAppConnectionCard() {
   const {
     connection, isLoading, isConnected, templates,
     metaConfig, isMetaConfigLoading,
-    connectViaEmbeddedSignup, connectManual, disconnect, reconnect, testSend,
+    connectViaEmbeddedSignup, disconnect, reconnect, testSend,
   } = useWhatsAppConnection();
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [manualForm, setManualForm] = useState({
-    phoneNumberId: "",
-    businessAccountId: "",
-    phoneNumber: "",
-    displayName: "",
-    accessToken: "",
-  });
   // Ref to store session info from the postMessage listener
   const sessionInfoRef = useRef<{
     waba_id?: string;
