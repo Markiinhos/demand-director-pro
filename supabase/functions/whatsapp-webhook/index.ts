@@ -1,7 +1,36 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function getMetaConfigStatus() {
+  const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
+  const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
+  const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
+
+  return {
+    hasMetaAppId: Boolean(metaAppId),
+    hasMetaAppSecret: Boolean(metaAppSecret),
+    hasMetaConfigId: Boolean(metaConfigId),
+    ready: Boolean(metaAppId && metaAppSecret && metaConfigId),
+  };
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const url = new URL(req.url);
+
+  if (url.pathname.endsWith("/config-status")) {
+    return new Response(JSON.stringify(getMetaConfigStatus()), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   // GET - Webhook verification (Meta sends this during setup)
   if (req.method === "GET") {
