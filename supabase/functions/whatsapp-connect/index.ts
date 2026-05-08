@@ -38,6 +38,25 @@ function metaConfigStatus() {
   };
 }
 
+/**
+ * Always returns HTTP 200 so supabase.functions.invoke passes data to the client.
+ * Logical errors are indicated by { success: false, error: "..." } in the body.
+ */
+function jsonOk(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function jsonError(error: string, details?: Record<string, unknown>) {
+  return jsonOk({ success: false, error, ...details });
+}
+
+function jsonSuccess(data: unknown) {
+  return jsonOk({ success: true, ...data as Record<string, unknown> });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -46,26 +65,47 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const isConfigStatusRoute = url.pathname.endsWith("/config-status");
+
+    console.log("[whatsapp-connect] ════════════════════════════════════");
+    console.log("[whatsapp-connect] Incoming request:", req.method, url.pathname);
+    console.log("[whatsapp-connect] Content-Type:", req.headers.get("content-type"));
+    console.log("[whatsapp-connect] Auth present:", Boolean(req.headers.get("Authorization")));
+
+    // ── Parse body (robust: read as text then JSON.parse) ────
     let requestBody: ConnectRequestBody | null = null;
+    let rawBodyPreview = "(not read)";
 
     if (req.method !== "GET") {
       try {
-        requestBody = await req.json() as ConnectRequestBody;
-      } catch (_) {
+        const rawBody = await req.text();
+        rawBodyPreview = rawBody?.substring(0, 300) || "(empty)";
+        console.log("[whatsapp-connect] Raw body:", rawBodyPreview);
+        if (rawBody) {
+          requestBody = JSON.parse(rawBody);
+          console.log("[whatsapp-connect] Parsed body → action:", requestBody?.action, "| code present:", Boolean(requestBody?.code));
+        }
+      } catch (e) {
+        console.error("[whatsapp-connect] ❌ Body parse FAILED:", e.message, "| raw preview:", rawBodyPreview);
         requestBody = null;
       }
     }
 
-    if (isConfigStatusRoute || requestBody?.action === "config-status") {
-      console.log("[whatsapp-connect] config-status requested", metaConfigStatus());
-      return json(metaConfigStatus());
+    // Also check URL query params as fallback
+    const actionParam = url.searchParams.get("action");
+
+    // ── config-status (NO auth required) ────────────────────
+    if (isConfigStatusRoute || requestBody?.action === "config-status" || actionParam === "config-status") {
+      const status = metaConfigStatus();
+      console.log("[whatsapp-connect] → config-status response:", JSON.stringify(status));
+      return jsonOk(status);
     }
 
     // ── Auth ──────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
+
     if (!authHeader?.startsWith("Bearer ")) {
-      console.error("[whatsapp-connect] No auth header", { hasAuth: Boolean(authHeader) });
-      return json({ error: "Unauthorized - token não fornecido" }, 401);
+      console.error("[whatsapp-connect] ❌ No valid auth header. Has header:", Boolean(authHeader));
+      return jsonError("Unauthorized - token não fornecido", { _authMissing: true });
     }
 
     const supabaseAuth = createClient(
@@ -76,32 +116,41 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
-      console.error("[whatsapp-connect] Auth failed", { authError: authError?.message });
-      return json({ error: "Unauthorized - usuário não autenticado" }, 401);
+      console.error("[whatsapp-connect] ❌ Auth failed:", authError?.message);
+      return jsonError("Unauthorized - usuário não autenticado", {
+        _authError: authError?.message || "user is null",
+      });
     }
-    console.log("[whatsapp-connect] Authenticated user:", user.id);
+    console.log("[whatsapp-connect] ✅ Authenticated user:", user.id);
 
     // ── Secrets ──────────────────────────────────────────
     const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
 
-    if (requestBody?.action === "public-config") {
+    // ── public-config (auth required) ───────────────────
+    if (requestBody?.action === "public-config" || actionParam === "public-config") {
       if (!META_APP_ID || !META_CONFIG_ID) {
-        console.error("Missing Meta public config", {
+        console.error("[whatsapp-connect] ❌ Missing Meta public config:", {
           hasMetaAppId: Boolean(META_APP_ID),
           hasMetaConfigId: Boolean(META_CONFIG_ID),
         });
-        return json({ error: "Configuração pública da Meta indisponível." }, 500);
+        return jsonError("Configuração pública da Meta indisponível.", {
+          hasMetaAppId: Boolean(META_APP_ID),
+          hasMetaConfigId: Boolean(META_CONFIG_ID),
+        });
       }
-
-      return json({ appId: META_APP_ID, configId: META_CONFIG_ID });
+      console.log("[whatsapp-connect] → public-config: appId present, configId present");
+      return jsonOk({ appId: META_APP_ID, configId: META_CONFIG_ID });
     }
 
     if (!META_APP_ID || !META_APP_SECRET) {
-      console.error("Missing required Meta backend config", metaConfigStatus());
-      return json({ error: "META_APP_ID e META_APP_SECRET não configurados no servidor. Configure com: npx supabase secrets set META_APP_ID=xxx META_APP_SECRET=xxx" }, 500);
+      console.error("[whatsapp-connect] ❌ Missing required Meta backend config:", metaConfigStatus());
+      return jsonError(
+        "META_APP_ID e META_APP_SECRET não configurados no servidor. Configure com: npx supabase secrets set META_APP_ID=xxx META_APP_SECRET=xxx",
+        metaConfigStatus()
+      );
     }
 
-    console.log("[whatsapp-connect] Action:", requestBody?.action, "Code present:", Boolean(requestBody?.code));
+    console.log("[whatsapp-connect] Meta config OK. Processing connect request...");
 
     // ── Service role client ──────────────────────────────
     const supabase = createClient(
@@ -112,32 +161,56 @@ Deno.serve(async (req) => {
     const { code, wabaId, phoneNumberId } = requestBody || {};
 
     if (!code) {
-      return json({ error: "Código de autorização (code) ausente." }, 400);
+      console.error("[whatsapp-connect] ❌ No code in request body. Body keys:", requestBody ? Object.keys(requestBody) : "null");
+      return jsonError("Código de autorização (code) ausente. Certifique-se de completar o fluxo de login do Facebook.", {
+        receivedBodyKeys: requestBody ? Object.keys(requestBody) : null,
+        bodyWasNull: requestBody === null,
+        rawBodyPreview,
+      });
     }
 
     // ── Step 1: Exchange code for Business Access Token ──
-    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
+      codeLength: code.length,
+      codePrefix: code.substring(0, 10) + "...",
+      wabaId: wabaId || "(not provided)",
+      phoneNumberId: phoneNumberId || "(not provided)",
+    });
 
-    console.log("[whatsapp-connect] Exchanging code for token...", { codeLength: code.length, wabaId, phoneNumberId });
+    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();
 
     if (!tokenRes.ok || !tokenData.access_token) {
       const errMsg = tokenData?.error?.message || "Falha ao trocar código por token.";
-      console.error("[whatsapp-connect] Token exchange FAILED:", JSON.stringify(tokenData));
-      await supabase.from("whatsapp_logs").insert({
-        event_type: "embedded_signup_token_error",
-        user_id: user.id,
-        payload: tokenData,
-        error_message: errMsg,
+      const errType = tokenData?.error?.type || "unknown";
+      const errCode = tokenData?.error?.code || 0;
+      console.error("[whatsapp-connect] ❌ Token exchange FAILED:", JSON.stringify(tokenData));
+      console.error("[whatsapp-connect]    HTTP status:", tokenRes.status);
+      console.error("[whatsapp-connect]    Error type:", errType, "| code:", errCode);
+
+      try {
+        await supabase.from("whatsapp_logs").insert({
+          event_type: "embedded_signup_token_error",
+          user_id: user.id,
+          payload: tokenData,
+          error_message: errMsg,
+        });
+      } catch (logErr) {
+        console.error("[whatsapp-connect] Failed to log error to DB:", logErr);
+      }
+
+      return jsonError(`Token exchange falhou: ${errMsg}`, {
+        fbErrorType: errType,
+        fbErrorCode: errCode,
+        tokenHttpStatus: tokenRes.status,
       });
-      return json({ error: `Token exchange falhou: ${errMsg}` }, 400);
     }
-    console.log("[whatsapp-connect] Token exchange SUCCESS, token length:", tokenData.access_token.length);
+    console.log("[whatsapp-connect] ✅ Token exchange SUCCESS, token length:", tokenData.access_token.length);
 
     const accessToken = tokenData.access_token;
 
-    // ── Step 2: Get phone number details (if we have the ID) ──
+    // ── Step 2: Get phone number details ──────────────────
     let phoneNumber = "";
     let displayName = "";
     let resolvedPhoneNumberId = phoneNumberId;
@@ -145,40 +218,51 @@ Deno.serve(async (req) => {
 
     // If we got the waba_id but not the phone_number_id, fetch phone numbers
     if (resolvedWabaId && !resolvedPhoneNumberId) {
+      console.log("[whatsapp-connect] Step 2a: Fetching phone numbers from WABA:", resolvedWabaId);
       try {
         const phonesRes = await fetch(
           `${GRAPH_API}/${resolvedWabaId}/phone_numbers?access_token=${accessToken}`
         );
         const phonesData = await phonesRes.json();
+        console.log("[whatsapp-connect] Phone numbers response:", JSON.stringify(phonesData)?.substring(0, 500));
         if (phonesData?.data?.[0]) {
           resolvedPhoneNumberId = phonesData.data[0].id;
           phoneNumber = phonesData.data[0].display_phone_number || "";
           displayName = phonesData.data[0].verified_name || "";
+          console.log("[whatsapp-connect] ✅ Found phone:", resolvedPhoneNumberId, phoneNumber, displayName);
         }
-      } catch (_) { /* non-critical */ }
+      } catch (e) {
+        console.error("[whatsapp-connect] Phone numbers fetch error (non-critical):", e.message);
+      }
     }
 
     // If we have the phone_number_id, get its details
     if (resolvedPhoneNumberId) {
+      console.log("[whatsapp-connect] Step 2b: Getting phone details for:", resolvedPhoneNumberId);
       try {
         const phoneRes = await fetch(
           `${GRAPH_API}/${resolvedPhoneNumberId}?fields=verified_name,display_phone_number,quality_rating,code_verification_status&access_token=${accessToken}`
         );
         const phoneData = await phoneRes.json();
+        console.log("[whatsapp-connect] Phone details:", JSON.stringify(phoneData)?.substring(0, 300));
         if (phoneData) {
           phoneNumber = phoneData.display_phone_number || phoneNumber;
           displayName = phoneData.verified_name || displayName;
         }
-      } catch (_) { /* non-critical */ }
+      } catch (e) {
+        console.error("[whatsapp-connect] Phone details fetch error (non-critical):", e.message);
+      }
     }
 
     // If we don't have the WABA ID yet, try to find it from the token's debug info
     if (!resolvedWabaId) {
+      console.log("[whatsapp-connect] Step 2c: No WABA ID, trying debug_token...");
       try {
         const debugRes = await fetch(
           `${GRAPH_API}/debug_token?input_token=${accessToken}&access_token=${META_APP_ID}|${META_APP_SECRET}`
         );
         const debugData = await debugRes.json();
+        console.log("[whatsapp-connect] debug_token response:", JSON.stringify(debugData)?.substring(0, 500));
         const granularScopes: GranularScope[] = Array.isArray(debugData?.data?.granular_scopes)
           ? debugData.data.granular_scopes
           : [];
@@ -187,27 +271,66 @@ Deno.serve(async (req) => {
         );
         if (waScope?.target_ids?.[0]) {
           resolvedWabaId = waScope.target_ids[0];
+          console.log("[whatsapp-connect] ✅ Found WABA ID from debug_token:", resolvedWabaId);
         }
-      } catch (_) { /* non-critical */ }
+
+        // Also try to find phone number ID from scopes if still missing
+        if (!resolvedPhoneNumberId) {
+          const msgScope = granularScopes.find((s) =>
+            s.permission === "whatsapp_business_messaging"
+          );
+          if (msgScope?.target_ids?.[0]) {
+            resolvedPhoneNumberId = msgScope.target_ids[0];
+            console.log("[whatsapp-connect] ✅ Found phone number ID from debug_token:", resolvedPhoneNumberId);
+          }
+        }
+      } catch (e) {
+        console.error("[whatsapp-connect] debug_token error (non-critical):", e.message);
+      }
     }
 
-    // ── Step 3: Subscribe app to WABA webhooks ──
-    if (resolvedWabaId) {
+    // Last resort: if we have WABA but still no phone number, try fetching
+    if (resolvedWabaId && !resolvedPhoneNumberId) {
+      console.log("[whatsapp-connect] Step 2d: Last resort phone number fetch from WABA:", resolvedWabaId);
       try {
-        await fetch(`${GRAPH_API}/${resolvedWabaId}/subscribed_apps`, {
+        const phonesRes = await fetch(
+          `${GRAPH_API}/${resolvedWabaId}/phone_numbers?access_token=${accessToken}`
+        );
+        const phonesData = await phonesRes.json();
+        if (phonesData?.data?.[0]) {
+          resolvedPhoneNumberId = phonesData.data[0].id;
+          phoneNumber = phonesData.data[0].display_phone_number || phoneNumber;
+          displayName = phonesData.data[0].verified_name || displayName;
+          console.log("[whatsapp-connect] ✅ Found phone (last resort):", resolvedPhoneNumberId);
+        }
+      } catch (e) {
+        console.error("[whatsapp-connect] Last resort phone fetch error:", e.message);
+      }
+    }
+
+    // ── Step 3: Subscribe app to WABA webhooks ──────────
+    if (resolvedWabaId) {
+      console.log("[whatsapp-connect] Step 3: Subscribing app to WABA webhooks:", resolvedWabaId);
+      try {
+        const subRes = await fetch(`${GRAPH_API}/${resolvedWabaId}/subscribed_apps`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
         });
-      } catch (_) { /* non-critical */ }
+        const subData = await subRes.json();
+        console.log("[whatsapp-connect] Subscribe result:", JSON.stringify(subData));
+      } catch (e) {
+        console.error("[whatsapp-connect] Subscribe error (non-critical):", e.message);
+      }
     }
 
-    // ── Step 4: Register phone number for Cloud API ──
+    // ── Step 4: Register phone number for Cloud API ─────
     if (resolvedPhoneNumberId) {
+      console.log("[whatsapp-connect] Step 4: Registering phone for Cloud API:", resolvedPhoneNumberId);
       try {
-        await fetch(`${GRAPH_API}/${resolvedPhoneNumberId}/register`, {
+        const regRes = await fetch(`${GRAPH_API}/${resolvedPhoneNumberId}/register`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -218,13 +341,28 @@ Deno.serve(async (req) => {
             pin: "000000",
           }),
         });
-      } catch (_) { /* non-critical, may already be registered */ }
+        const regData = await regRes.json();
+        console.log("[whatsapp-connect] Register result:", JSON.stringify(regData));
+      } catch (e) {
+        console.error("[whatsapp-connect] Register error (non-critical, may already be registered):", e.message);
+      }
     }
 
     // ── Step 5: Save connection ──────────────────────────
     if (!resolvedPhoneNumberId) {
-      return json({ error: "Não foi possível identificar o Phone Number ID. Tente conectar novamente." }, 400);
+      console.error("[whatsapp-connect] ❌ No phone number ID resolved after all attempts");
+      return jsonError("Não foi possível identificar o Phone Number ID. Tente conectar novamente.", {
+        resolvedWabaId: resolvedWabaId || null,
+      });
     }
+
+    console.log("[whatsapp-connect] Step 5: Saving connection...", {
+      userId: user.id,
+      phoneNumberId: resolvedPhoneNumberId,
+      wabaId: resolvedWabaId,
+      phoneNumber,
+      displayName,
+    });
 
     const { data: savedConn, error: saveError } = await supabase
       .from("whatsapp_connections")
@@ -248,33 +386,31 @@ Deno.serve(async (req) => {
       .single();
 
     if (saveError) {
-      return json({ error: "Erro ao salvar conexão: " + saveError.message }, 500);
+      console.error("[whatsapp-connect] ❌ Save connection error:", saveError.message);
+      return jsonError("Erro ao salvar conexão: " + saveError.message);
     }
 
-    // Log success
-    await supabase.from("whatsapp_logs").insert({
-      event_type: "embedded_signup_success",
-      user_id: user.id,
-      payload: {
-        waba_id: resolvedWabaId,
-        phone_number_id: resolvedPhoneNumberId,
-        phone_number: phoneNumber,
-        display_name: displayName,
-      },
-    });
+    console.log("[whatsapp-connect] ✅ Connection saved successfully:", savedConn?.id);
 
-    return json({
-      success: true,
-      connection: savedConn,
-    });
+    // Log success
+    try {
+      await supabase.from("whatsapp_logs").insert({
+        event_type: "embedded_signup_success",
+        user_id: user.id,
+        payload: {
+          waba_id: resolvedWabaId,
+          phone_number_id: resolvedPhoneNumberId,
+          phone_number: phoneNumber,
+          display_name: displayName,
+        },
+      });
+    } catch (logErr) {
+      console.error("[whatsapp-connect] Failed to log success:", logErr);
+    }
+
+    return jsonSuccess({ connection: savedConn });
   } catch (error) {
-    return json({ error: error.message }, 500);
+    console.error("[whatsapp-connect] ❌ UNHANDLED ERROR:", error.message, error.stack);
+    return jsonOk({ success: false, error: error.message, _unhandled: true });
   }
 });
-
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}

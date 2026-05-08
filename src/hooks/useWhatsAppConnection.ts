@@ -10,6 +10,41 @@ export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 const FRONTEND_META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const FRONTEND_META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
 
+/**
+ * Helper to invoke an edge function and handle responses uniformly.
+ * Since the Edge Function now always returns HTTP 200, we just
+ * check data.success / data.error for logical errors.
+ */
+async function invokeEdgeFunction<T = Record<string, unknown>>(
+  functionName: string,
+  body: Record<string, unknown>
+): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+  // If supabase client itself errored (network, timeout, etc.)
+  if (error) {
+    let detailedMsg = error.message;
+    try {
+      // Try to extract body from error.context (FunctionsHttpError)
+      if ((error as any).context) {
+        const bodyData = await (error as any).context.json();
+        detailedMsg = bodyData?.error || bodyData?.message || detailedMsg;
+        console.error(`❌ [${functionName}] Edge function error body:`, bodyData);
+      }
+    } catch (_) { /* ignore parse error */ }
+    throw new Error(detailedMsg);
+  }
+
+  // Logical error from the function (success: false)
+  if (data?.success === false || data?.error) {
+    const errMsg = data.error || "Erro desconhecido do servidor";
+    console.error(`❌ [${functionName}] Logical error:`, data);
+    throw new Error(errMsg);
+  }
+
+  return data as T;
+}
+
 export function useWhatsAppConnection() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -46,42 +81,86 @@ export function useWhatsAppConnection() {
   const metaConfig = useQuery({
     queryKey: ["whatsapp_meta_config"],
     queryFn: async () => {
-      const results = await Promise.all([
+      console.group("🔧 [WhatsApp] Meta Config — fetching...");
+
+      // Use Promise.allSettled so one failure doesn't block the other
+      const [statusResult, publicResult] = await Promise.allSettled([
         supabase.functions.invoke("whatsapp-connect", { body: { action: "config-status" } }),
         supabase.functions.invoke("whatsapp-connect", { body: { action: "public-config" } }),
       ]);
 
-      const statusData = results[0].data;
-      const publicData = results[1].data;
-      const publicError = results[1].error;
+      // Extract data from settled results
+      let statusData: Record<string, unknown> | null = null;
+      let publicData: Record<string, unknown> | null = null;
+      let publicError: string | null = null;
 
-      // Log detalhado para diagnóstico
-      console.group("🔧 [WhatsApp] Meta Config Diagnostic");
-      console.log("config-status response:", results[0]);
-      console.log("public-config response:", results[1]);
+      if (statusResult.status === "fulfilled") {
+        const { data, error } = statusResult.value;
+        if (error) {
+          console.warn("⚠ config-status returned error:", error.message);
+          // Try to read body from error.context
+          try {
+            if ((error as any).context) {
+              statusData = await (error as any).context.json();
+            }
+          } catch (_) { /* ignore */ }
+        } else {
+          statusData = data;
+        }
+      } else {
+        console.error("❌ config-status promise rejected:", statusResult.reason);
+      }
+
+      if (publicResult.status === "fulfilled") {
+        const { data, error } = publicResult.value;
+        if (error) {
+          console.warn("⚠ public-config returned error:", error.message);
+          publicError = error.message;
+          try {
+            if ((error as any).context) {
+              publicData = await (error as any).context.json();
+              publicError = (publicData as any)?.error || publicError;
+            }
+          } catch (_) { /* ignore */ }
+        } else {
+          publicData = data;
+          // Check for logical error in response
+          if (data?.success === false || data?.error) {
+            publicError = data.error || "Configuração indisponível";
+          }
+        }
+      } else {
+        console.error("❌ public-config promise rejected:", publicResult.reason);
+        publicError = "Falha na requisição";
+      }
+
+      // Diagnostic log
+      console.log("config-status data:", statusData);
+      console.log("public-config data:", publicData);
+      console.log("public-config error:", publicError);
       console.log("FRONTEND_META_APP_ID:", FRONTEND_META_APP_ID || "(vazio)");
       console.log("FRONTEND_META_CONFIG_ID:", FRONTEND_META_CONFIG_ID || "(vazio)");
       console.groupEnd();
 
-      const appId = FRONTEND_META_APP_ID || publicData?.appId || "";
-      const configId = FRONTEND_META_CONFIG_ID || publicData?.configId || "";
+      const appId = FRONTEND_META_APP_ID || (publicData as any)?.appId || "";
+      const configId = FRONTEND_META_CONFIG_ID || (publicData as any)?.configId || "";
       const missing: string[] = [];
 
       if (!appId) missing.push("VITE_META_APP_ID / META_APP_ID");
       if (!configId) missing.push("VITE_META_CONFIG_ID");
-      if (!statusData?.hasMetaAppSecret) missing.push("META_APP_SECRET");
+      if (!(statusData as any)?.hasMetaAppSecret) missing.push("META_APP_SECRET");
 
       return {
         appId,
         configId,
         hasFrontendAppId: Boolean(FRONTEND_META_APP_ID),
         hasFrontendConfigId: Boolean(FRONTEND_META_CONFIG_ID),
-        hasBackendAppId: Boolean(statusData?.hasMetaAppId),
-        hasBackendConfigId: Boolean(statusData?.hasMetaConfigId),
-        hasMetaAppSecret: Boolean(statusData?.hasMetaAppSecret),
-        ready: Boolean(appId && configId && statusData?.hasMetaAppSecret && !publicError),
+        hasBackendAppId: Boolean((statusData as any)?.hasMetaAppId),
+        hasBackendConfigId: Boolean((statusData as any)?.hasMetaConfigId),
+        hasMetaAppSecret: Boolean((statusData as any)?.hasMetaAppSecret),
+        ready: Boolean(appId && configId && (statusData as any)?.hasMetaAppSecret && !publicError),
         missing,
-        error: publicError?.message || null,
+        error: publicError,
       };
     },
     enabled: !!user,
@@ -102,36 +181,24 @@ export function useWhatsAppConnection() {
         phoneNumberId: input.phoneNumberId,
       });
 
-      const { data, error } = await supabase.functions.invoke("whatsapp-connect", {
-        body: {
-          code: input.code,
-          wabaId: input.wabaId || null,
-          phoneNumberId: input.phoneNumberId || null,
-        },
+      // invokeEdgeFunction handles both HTTP and logical errors
+      const result = await invokeEdgeFunction("whatsapp-connect", {
+        code: input.code,
+        wabaId: input.wabaId || null,
+        phoneNumberId: input.phoneNumberId || null,
       });
 
-      console.log("📦 [WhatsApp] Resposta do backend:", { data, error });
-
-      if (error) {
-        // Tentar extrair mensagem real do corpo da resposta
-        let detailedMsg = error.message;
-        try {
-          if (error.context) {
-            const body = await error.context.json();
-            detailedMsg = body?.error || body?.message || detailedMsg;
-            console.error("❌ [WhatsApp] Erro detalhado do backend:", body);
-          }
-        } catch (_) { /* ignore parse error */ }
-        throw new Error(detailedMsg);
-      }
-      if (data?.error) throw new Error(data.error);
-      return data;
+      console.log("✅ [WhatsApp] Resposta do backend:", result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp_connection"] });
       toast.success("WhatsApp Business conectado com sucesso!");
     },
-    onError: (e) => toast.error("Erro ao conectar: " + e.message),
+    onError: (e) => {
+      console.error("❌ [WhatsApp] Erro na conexão:", e.message);
+      toast.error("Erro ao conectar: " + e.message);
+    },
   });
 
   // ── Manual connect — advanced/debug only ──────────────
