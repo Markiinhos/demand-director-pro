@@ -7,12 +7,47 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 
+function getMetaConfig() {
+  const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
+  const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
+  const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
+
+  return { metaAppId, metaConfigId, metaAppSecret };
+}
+
+function metaConfigStatus() {
+  const { metaAppId, metaConfigId, metaAppSecret } = getMetaConfig();
+
+  return {
+    hasMetaAppId: Boolean(metaAppId),
+    hasMetaAppSecret: Boolean(metaAppSecret),
+    hasMetaConfigId: Boolean(metaConfigId),
+    ready: Boolean(metaAppId && metaAppSecret && metaConfigId),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    const url = new URL(req.url);
+    const isConfigStatusRoute = url.pathname.endsWith("/config-status");
+    let requestBody: any = null;
+
+    if (req.method !== "GET") {
+      try {
+        requestBody = await req.json();
+      } catch (_) {
+        requestBody = null;
+      }
+    }
+
+    if (isConfigStatusRoute || requestBody?.action === "config-status") {
+      return json(metaConfigStatus());
+    }
+
     // ── Auth ──────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -31,10 +66,22 @@ Deno.serve(async (req) => {
     }
 
     // ── Secrets ──────────────────────────────────────────
-    const META_APP_ID = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID");
-    const META_APP_SECRET = Deno.env.get("META_APP_SECRET");
+    const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
+
+    if (requestBody?.action === "public-config") {
+      if (!META_APP_ID || !META_CONFIG_ID) {
+        console.error("Missing Meta public config", {
+          hasMetaAppId: Boolean(META_APP_ID),
+          hasMetaConfigId: Boolean(META_CONFIG_ID),
+        });
+        return json({ error: "Configuração pública da Meta indisponível." }, 500);
+      }
+
+      return json({ appId: META_APP_ID, configId: META_CONFIG_ID });
+    }
 
     if (!META_APP_ID || !META_APP_SECRET) {
+      console.error("Missing required Meta backend config", metaConfigStatus());
       return json({ error: "META_APP_ID e META_APP_SECRET não configurados no servidor." }, 500);
     }
 
@@ -44,7 +91,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { code, wabaId, phoneNumberId } = await req.json();
+    const { code, wabaId, phoneNumberId } = requestBody || {};
 
     if (!code) {
       return json({ error: "Código de autorização (code) ausente." }, 400);
