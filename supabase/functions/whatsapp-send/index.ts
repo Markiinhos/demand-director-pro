@@ -7,9 +7,30 @@ const corsHeaders = {
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v21.0";
 
+function getMetaConfigStatus() {
+  const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
+  const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
+  const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
+
+  return {
+    hasMetaAppId: Boolean(metaAppId),
+    hasMetaAppSecret: Boolean(metaAppSecret),
+    hasMetaConfigId: Boolean(metaConfigId),
+    ready: Boolean(metaAppId && metaAppSecret && metaConfigId),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  const url = new URL(req.url);
+  if (req.method === "GET" && url.pathname.endsWith("/config-status")) {
+    return new Response(JSON.stringify(getMetaConfigStatus()), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
