@@ -273,7 +273,7 @@ export function WhatsAppConnectionCard() {
                 </p>
               </div>
 
-              {META_APP_ID ? (
+              {isMetaReady ? (
                 <Button
                   size="lg"
                   onClick={handleEmbeddedSignup}
@@ -294,21 +294,18 @@ export function WhatsAppConnectionCard() {
                 </Button>
               ) : (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs text-amber-700 text-left space-y-2">
-                  <strong>⚠ Configuração necessária para Embedded Signup:</strong>
-                  <ol className="list-decimal list-inside space-y-1 mt-1">
-                    <li>
-                      No arquivo <code className="bg-amber-500/10 px-1 rounded">.env</code> do projeto, defina:
-                      <code className="bg-amber-500/10 px-1.5 py-0.5 rounded block mt-0.5 ml-4">VITE_META_APP_ID="seu_app_id"</code>
-                      <code className="bg-amber-500/10 px-1.5 py-0.5 rounded block mt-0.5 ml-4">VITE_META_CONFIG_ID="seu_config_id"</code>
-                    </li>
-                    <li>
-                      Nos Supabase <strong>Edge Function Secrets</strong>, configure:
-                      <code className="bg-amber-500/10 px-1.5 py-0.5 rounded block mt-0.5 ml-4">META_APP_ID</code>
-                      <code className="bg-amber-500/10 px-1.5 py-0.5 rounded block mt-0.5 ml-4">META_APP_SECRET</code>
-                    </li>
-                  </ol>
+                  <strong>{isMetaConfigLoading ? "Verificando configuração da Meta..." : "⚠ Configuração necessária para Embedded Signup:"}</strong>
+                  {!isMetaConfigLoading && (
+                    <div className="space-y-2">
+                      <p>Faltando: {metaConfig?.missing?.join(", ") || "diagnóstico indisponível"}.</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Frontend build: VITE_META_APP_ID {metaConfig?.hasFrontendAppId ? "ok" : "não encontrado"}; VITE_META_CONFIG_ID {metaConfig?.hasFrontendConfigId ? "ok" : "não encontrado"}.</li>
+                        <li>Backend Edge Function: META_APP_ID/VITE_META_APP_ID {metaConfig?.hasBackendAppId ? "ok" : "não encontrado"}; VITE_META_CONFIG_ID {metaConfig?.hasBackendConfigId ? "ok" : "não encontrado"}; META_APP_SECRET {metaConfig?.hasMetaAppSecret ? "ok" : "não encontrado"}.</li>
+                      </ul>
+                    </div>
+                  )}
                   <p className="text-[10px] text-amber-600 mt-1">
-                    Obtenha esses valores em <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">developers.facebook.com</a> → seu App → Configurações → Básico.
+                    O App ID e Config ID podem vir do build do frontend ou do diagnóstico autenticado da Edge Function; o App Secret nunca é exposto ao navegador.
                   </p>
                 </div>
               )}
@@ -335,7 +332,7 @@ export function WhatsAppConnectionCard() {
               A conexão apresentou um erro. Reconecte seu WhatsApp Business para normalizar.
             </div>
             <div className="flex gap-2">
-              {META_APP_ID && (
+              {isMetaReady && (
                 <Button size="sm" onClick={handleEmbeddedSignup} disabled={isBusy}>
                   {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                   Reconectar via Meta
