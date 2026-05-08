@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
             const contactName = contacts?.[0]?.profile?.name || from;
 
             // Determine message type and media
-            let msgType = message.type || "text";
+            const msgType = message.type || "text";
             let mediaUrl: string | null = null;
 
             if (["image", "document", "audio", "video"].includes(msgType)) {
