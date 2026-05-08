@@ -36,6 +36,18 @@ interface FBLoginResponse {
 
 function loadFacebookSDK(appId: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    // ── DIAGNÓSTICO: domínio que o Facebook SDK enxerga ──
+    console.group("🔍 [FB SDK] Diagnóstico de domínio");
+    console.log("window.location.origin :", window.location.origin);
+    console.log("window.location.hostname:", window.location.hostname);
+    console.log("window.location.href    :", window.location.href);
+    console.log("document.domain         :", document.domain);
+    console.log(
+      "👉 Domínio para cadastrar na Meta (sem https:// e sem /):",
+      window.location.hostname
+    );
+    console.groupEnd();
+
     if (window.FB) {
       resolve();
       return;
@@ -48,6 +60,7 @@ function loadFacebookSDK(appId: string): Promise<void> {
         xfbml: true,
         version: "v22.0",
       });
+      console.log("✅ [FB SDK] Inicializado com sucesso no domínio:", window.location.hostname);
       resolve();
     };
 
