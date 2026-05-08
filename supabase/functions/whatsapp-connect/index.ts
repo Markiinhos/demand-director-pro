@@ -7,6 +7,18 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 
+type ConnectRequestBody = {
+  action?: string;
+  code?: string;
+  wabaId?: string;
+  phoneNumberId?: string;
+};
+
+type GranularScope = {
+  permission?: string;
+  target_ids?: string[];
+};
+
 function getMetaConfig() {
   const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
   const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
@@ -34,11 +46,11 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const isConfigStatusRoute = url.pathname.endsWith("/config-status");
-    let requestBody: any = null;
+    let requestBody: ConnectRequestBody | null = null;
 
     if (req.method !== "GET") {
       try {
-        requestBody = await req.json();
+        requestBody = await req.json() as ConnectRequestBody;
       } catch (_) {
         requestBody = null;
       }
@@ -158,8 +170,10 @@ Deno.serve(async (req) => {
           `${GRAPH_API}/debug_token?input_token=${accessToken}&access_token=${META_APP_ID}|${META_APP_SECRET}`
         );
         const debugData = await debugRes.json();
-        const granularScopes = debugData?.data?.granular_scopes || [];
-        const waScope = granularScopes.find((s: any) =>
+        const granularScopes: GranularScope[] = Array.isArray(debugData?.data?.granular_scopes)
+          ? debugData.data.granular_scopes
+          : [];
+        const waScope = granularScopes.find((s) =>
           s.permission === "whatsapp_business_management"
         );
         if (waScope?.target_ids?.[0]) {
