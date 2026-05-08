@@ -57,13 +57,15 @@ Deno.serve(async (req) => {
     }
 
     if (isConfigStatusRoute || requestBody?.action === "config-status") {
+      console.log("[whatsapp-connect] config-status requested", metaConfigStatus());
       return json(metaConfigStatus());
     }
 
     // ── Auth ──────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return json({ error: "Unauthorized" }, 401);
+      console.error("[whatsapp-connect] No auth header", { hasAuth: Boolean(authHeader) });
+      return json({ error: "Unauthorized - token não fornecido" }, 401);
     }
 
     const supabaseAuth = createClient(
@@ -74,8 +76,10 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
-      return json({ error: "Unauthorized" }, 401);
+      console.error("[whatsapp-connect] Auth failed", { authError: authError?.message });
+      return json({ error: "Unauthorized - usuário não autenticado" }, 401);
     }
+    console.log("[whatsapp-connect] Authenticated user:", user.id);
 
     // ── Secrets ──────────────────────────────────────────
     const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
@@ -94,8 +98,10 @@ Deno.serve(async (req) => {
 
     if (!META_APP_ID || !META_APP_SECRET) {
       console.error("Missing required Meta backend config", metaConfigStatus());
-      return json({ error: "META_APP_ID e META_APP_SECRET não configurados no servidor." }, 500);
+      return json({ error: "META_APP_ID e META_APP_SECRET não configurados no servidor. Configure com: npx supabase secrets set META_APP_ID=xxx META_APP_SECRET=xxx" }, 500);
     }
+
+    console.log("[whatsapp-connect] Action:", requestBody?.action, "Code present:", Boolean(requestBody?.code));
 
     // ── Service role client ──────────────────────────────
     const supabase = createClient(
@@ -112,19 +118,22 @@ Deno.serve(async (req) => {
     // ── Step 1: Exchange code for Business Access Token ──
     const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
 
+    console.log("[whatsapp-connect] Exchanging code for token...", { codeLength: code.length, wabaId, phoneNumberId });
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();
 
     if (!tokenRes.ok || !tokenData.access_token) {
       const errMsg = tokenData?.error?.message || "Falha ao trocar código por token.";
+      console.error("[whatsapp-connect] Token exchange FAILED:", JSON.stringify(tokenData));
       await supabase.from("whatsapp_logs").insert({
         event_type: "embedded_signup_token_error",
         user_id: user.id,
         payload: tokenData,
         error_message: errMsg,
       });
-      return json({ error: errMsg }, 400);
+      return json({ error: `Token exchange falhou: ${errMsg}` }, 400);
     }
+    console.log("[whatsapp-connect] Token exchange SUCCESS, token length:", tokenData.access_token.length);
 
     const accessToken = tokenData.access_token;
 

@@ -46,10 +46,22 @@ export function useWhatsAppConnection() {
   const metaConfig = useQuery({
     queryKey: ["whatsapp_meta_config"],
     queryFn: async () => {
-      const [{ data: statusData }, { data: publicData, error: publicError }] = await Promise.all([
+      const results = await Promise.all([
         supabase.functions.invoke("whatsapp-connect", { body: { action: "config-status" } }),
         supabase.functions.invoke("whatsapp-connect", { body: { action: "public-config" } }),
       ]);
+
+      const statusData = results[0].data;
+      const publicData = results[1].data;
+      const publicError = results[1].error;
+
+      // Log detalhado para diagnóstico
+      console.group("🔧 [WhatsApp] Meta Config Diagnostic");
+      console.log("config-status response:", results[0]);
+      console.log("public-config response:", results[1]);
+      console.log("FRONTEND_META_APP_ID:", FRONTEND_META_APP_ID || "(vazio)");
+      console.log("FRONTEND_META_CONFIG_ID:", FRONTEND_META_CONFIG_ID || "(vazio)");
+      console.groupEnd();
 
       const appId = FRONTEND_META_APP_ID || publicData?.appId || "";
       const configId = FRONTEND_META_CONFIG_ID || publicData?.configId || "";
@@ -84,6 +96,12 @@ export function useWhatsAppConnection() {
       wabaId?: string;
       phoneNumberId?: string;
     }) => {
+      console.log("🚀 [WhatsApp] Embedded Signup — enviando code para backend...", {
+        codeLength: input.code?.length,
+        wabaId: input.wabaId,
+        phoneNumberId: input.phoneNumberId,
+      });
+
       const { data, error } = await supabase.functions.invoke("whatsapp-connect", {
         body: {
           code: input.code,
@@ -91,7 +109,21 @@ export function useWhatsAppConnection() {
           phoneNumberId: input.phoneNumberId || null,
         },
       });
-      if (error) throw error;
+
+      console.log("📦 [WhatsApp] Resposta do backend:", { data, error });
+
+      if (error) {
+        // Tentar extrair mensagem real do corpo da resposta
+        let detailedMsg = error.message;
+        try {
+          if (error.context) {
+            const body = await error.context.json();
+            detailedMsg = body?.error || body?.message || detailedMsg;
+            console.error("❌ [WhatsApp] Erro detalhado do backend:", body);
+          }
+        } catch (_) { /* ignore parse error */ }
+        throw new Error(detailedMsg);
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },
