@@ -7,6 +7,9 @@ import { toast } from "sonner";
 export type WhatsAppConnection = Tables<"whatsapp_connections">;
 export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 
+const FRONTEND_META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
+const FRONTEND_META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
+
 export function useWhatsAppConnection() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -38,6 +41,40 @@ export function useWhatsAppConnection() {
       return data as WhatsAppTemplate[];
     },
     enabled: !!user,
+  });
+
+  const metaConfig = useQuery({
+    queryKey: ["whatsapp_meta_config"],
+    queryFn: async () => {
+      const [{ data: statusData }, { data: publicData, error: publicError }] = await Promise.all([
+        supabase.functions.invoke("whatsapp-connect", { body: { action: "config-status" } }),
+        supabase.functions.invoke("whatsapp-connect", { body: { action: "public-config" } }),
+      ]);
+
+      const appId = FRONTEND_META_APP_ID || publicData?.appId || "";
+      const configId = FRONTEND_META_CONFIG_ID || publicData?.configId || "";
+      const missing: string[] = [];
+
+      if (!appId) missing.push("VITE_META_APP_ID / META_APP_ID");
+      if (!configId) missing.push("VITE_META_CONFIG_ID");
+      if (!statusData?.hasMetaAppSecret) missing.push("META_APP_SECRET");
+
+      return {
+        appId,
+        configId,
+        hasFrontendAppId: Boolean(FRONTEND_META_APP_ID),
+        hasFrontendConfigId: Boolean(FRONTEND_META_CONFIG_ID),
+        hasBackendAppId: Boolean(statusData?.hasMetaAppId),
+        hasBackendConfigId: Boolean(statusData?.hasMetaConfigId),
+        hasMetaAppSecret: Boolean(statusData?.hasMetaAppSecret),
+        ready: Boolean(appId && configId && statusData?.hasMetaAppSecret && !publicError),
+        missing,
+        error: publicError?.message || null,
+      };
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   // ── Embedded Signup — primary flow ────────────────────
@@ -204,6 +241,9 @@ export function useWhatsAppConnection() {
     isLoading: connection.isLoading,
     isConnected: connection.data?.status === "connected",
     templates: templates.data ?? [],
+    metaConfig: metaConfig.data ?? null,
+    isMetaConfigLoading: metaConfig.isLoading,
+    refetchMetaConfig: metaConfig.refetch,
     connectViaEmbeddedSignup,
     connectManual,
     disconnect,
