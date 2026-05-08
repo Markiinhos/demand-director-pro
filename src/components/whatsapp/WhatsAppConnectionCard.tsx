@@ -39,7 +39,7 @@ interface FBLoginResponse {
   status: string;
 }
 
-function loadFacebookSDK(): Promise<void> {
+function loadFacebookSDK(appId: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.FB) {
       resolve();
@@ -48,7 +48,7 @@ function loadFacebookSDK(): Promise<void> {
 
     window.fbAsyncInit = function () {
       window.FB.init({
-        appId: META_APP_ID,
+        appId,
         cookie: true,
         xfbml: true,
         version: "v22.0",
@@ -84,6 +84,7 @@ function loadFacebookSDK(): Promise<void> {
 export function WhatsAppConnectionCard() {
   const {
     connection, isLoading, isConnected, templates,
+    metaConfig, isMetaConfigLoading,
     connectViaEmbeddedSignup, connectManual, disconnect, reconnect, testSend,
   } = useWhatsAppConnection();
 
@@ -103,13 +104,18 @@ export function WhatsAppConnectionCard() {
     phone_number_id?: string;
   }>({});
 
+  const activeMetaAppId = metaConfig?.appId || META_APP_ID;
+  const activeMetaConfigId = metaConfig?.configId || META_CONFIG_ID;
+  const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId && activeMetaConfigId);
+
   // ── Load Facebook SDK ──────────────────────────────────
   useEffect(() => {
-    if (!META_APP_ID) return;
-    loadFacebookSDK()
+    setSdkReady(false);
+    if (!activeMetaAppId) return;
+    loadFacebookSDK(activeMetaAppId)
       .then(() => setSdkReady(true))
       .catch(() => { /* SDK failed, user can use manual mode */ });
-  }, []);
+  }, [activeMetaAppId]);
 
   // ── Session Info Listener ──────────────────────────────
   useEffect(() => {
@@ -160,8 +166,8 @@ export function WhatsAppConnectionCard() {
     };
 
     // If config_id is set, use it (recommended by Meta)
-    if (META_CONFIG_ID) {
-      loginOptions.config_id = META_CONFIG_ID;
+    if (activeMetaConfigId) {
+      loginOptions.config_id = activeMetaConfigId;
     } else {
       // Fallback: use scope-based signup
       loginOptions.scope =
@@ -191,7 +197,7 @@ export function WhatsAppConnectionCard() {
         }
       }
     }, loginOptions);
-  }, [connectViaEmbeddedSignup]);
+  }, [activeMetaConfigId, connectViaEmbeddedSignup]);
 
   // ── Manual Connect ─────────────────────────────────────
   const handleManualConnect = () => {
