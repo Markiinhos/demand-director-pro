@@ -12,6 +12,7 @@ type ConnectRequestBody = {
   code?: string;
   wabaId?: string;
   phoneNumberId?: string;
+  redirectUri?: string;
 };
 
 type GranularScope = {
@@ -84,8 +85,9 @@ Deno.serve(async (req) => {
           requestBody = JSON.parse(rawBody);
           console.log("[whatsapp-connect] Parsed body → action:", requestBody?.action, "| code present:", Boolean(requestBody?.code));
         }
-      } catch (e) {
-        console.error("[whatsapp-connect] ❌ Body parse FAILED:", e.message, "| raw preview:", rawBodyPreview);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[whatsapp-connect] ❌ Body parse FAILED:", msg, "| raw preview:", rawBodyPreview);
         requestBody = null;
       }
     }
@@ -158,7 +160,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { code, wabaId, phoneNumberId } = requestBody || {};
+    const { code, wabaId, phoneNumberId, redirectUri } = requestBody || {};
 
     if (!code) {
       console.error("[whatsapp-connect] ❌ No code in request body. Body keys:", requestBody ? Object.keys(requestBody) : "null");
@@ -177,7 +179,11 @@ Deno.serve(async (req) => {
       phoneNumberId: phoneNumberId || "(not provided)",
     });
 
-    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    let tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    if (redirectUri) {
+      tokenUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      console.log("[whatsapp-connect] Including redirect_uri:", redirectUri);
+    }
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();
 
@@ -231,8 +237,8 @@ Deno.serve(async (req) => {
           displayName = phonesData.data[0].verified_name || "";
           console.log("[whatsapp-connect] ✅ Found phone:", resolvedPhoneNumberId, phoneNumber, displayName);
         }
-      } catch (e) {
-        console.error("[whatsapp-connect] Phone numbers fetch error (non-critical):", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] Phone numbers fetch error (non-critical):", e instanceof Error ? e.message : e);
       }
     }
 
@@ -249,8 +255,8 @@ Deno.serve(async (req) => {
           phoneNumber = phoneData.display_phone_number || phoneNumber;
           displayName = phoneData.verified_name || displayName;
         }
-      } catch (e) {
-        console.error("[whatsapp-connect] Phone details fetch error (non-critical):", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] Phone details fetch error (non-critical):", e instanceof Error ? e.message : e);
       }
     }
 
@@ -284,8 +290,8 @@ Deno.serve(async (req) => {
             console.log("[whatsapp-connect] ✅ Found phone number ID from debug_token:", resolvedPhoneNumberId);
           }
         }
-      } catch (e) {
-        console.error("[whatsapp-connect] debug_token error (non-critical):", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] debug_token error (non-critical):", e instanceof Error ? e.message : e);
       }
     }
 
@@ -303,8 +309,8 @@ Deno.serve(async (req) => {
           displayName = phonesData.data[0].verified_name || displayName;
           console.log("[whatsapp-connect] ✅ Found phone (last resort):", resolvedPhoneNumberId);
         }
-      } catch (e) {
-        console.error("[whatsapp-connect] Last resort phone fetch error:", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] Last resort phone fetch error:", e instanceof Error ? e.message : e);
       }
     }
 
@@ -321,8 +327,8 @@ Deno.serve(async (req) => {
         });
         const subData = await subRes.json();
         console.log("[whatsapp-connect] Subscribe result:", JSON.stringify(subData));
-      } catch (e) {
-        console.error("[whatsapp-connect] Subscribe error (non-critical):", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] Subscribe error (non-critical):", e instanceof Error ? e.message : e);
       }
     }
 
@@ -343,8 +349,8 @@ Deno.serve(async (req) => {
         });
         const regData = await regRes.json();
         console.log("[whatsapp-connect] Register result:", JSON.stringify(regData));
-      } catch (e) {
-        console.error("[whatsapp-connect] Register error (non-critical, may already be registered):", e.message);
+      } catch (e: unknown) {
+        console.error("[whatsapp-connect] Register error (non-critical, may already be registered):", e instanceof Error ? e.message : e);
       }
     }
 
@@ -409,8 +415,10 @@ Deno.serve(async (req) => {
     }
 
     return jsonSuccess({ connection: savedConn });
-  } catch (error) {
-    console.error("[whatsapp-connect] ❌ UNHANDLED ERROR:", error.message, error.stack);
-    return jsonOk({ success: false, error: error.message, _unhandled: true });
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error("[whatsapp-connect] ❌ UNHANDLED ERROR:", errMsg, errStack);
+    return jsonOk({ success: false, error: errMsg, _unhandled: true });
   }
 });

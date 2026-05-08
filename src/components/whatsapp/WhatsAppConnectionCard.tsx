@@ -184,6 +184,7 @@ export function WhatsAppConnectionCard() {
             code,
             wabaId: session.waba_id,
             phoneNumberId: session.phone_number_id,
+            redirectUri: window.location.origin + "/",
           },
           {
             onSettled: () => setIsConnecting(false),

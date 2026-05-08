@@ -174,6 +174,7 @@ export function useWhatsAppConnection() {
       code: string;
       wabaId?: string;
       phoneNumberId?: string;
+      redirectUri?: string;
     }) => {
       console.log("🚀 [WhatsApp] Embedded Signup — enviando code para backend...", {
         codeLength: input.code?.length,
@@ -186,6 +187,7 @@ export function useWhatsAppConnection() {
         code: input.code,
         wabaId: input.wabaId || null,
         phoneNumberId: input.phoneNumberId || null,
+        redirectUri: input.redirectUri || null,
       });
 
       console.log("✅ [WhatsApp] Resposta do backend:", result);
