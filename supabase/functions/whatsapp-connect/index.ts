@@ -174,6 +174,33 @@ Deno.serve(async (req) => {
 
     // Also check URL query params as fallback
     const actionParam = url.searchParams.get("action");
+    const codeParam = url.searchParams.get("code");
+    const stateParam = url.searchParams.get("state");
+    const metaErrorParam = url.searchParams.get("error") || url.searchParams.get("error_message");
+    const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET, metaRedirectUri: META_REDIRECT_URI } = getMetaConfig();
+    const oauthDialogRedirectUri = getOAuthRedirectUri(META_REDIRECT_URI);
+    let callbackReturnTo: string | null = null;
+    let userId = "";
+
+    const redirectToApp = (status: "connected" | "error", message?: string) => {
+      const returnUrl = new URL(callbackReturnTo || DEFAULT_RETURN_TO);
+      returnUrl.searchParams.set("whatsapp", status);
+      if (message) returnUrl.searchParams.set("message", message.substring(0, 180));
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, Location: returnUrl.toString() },
+      });
+    };
+
+    const respondError = (error: string, details?: Record<string, unknown>) => {
+      if (callbackReturnTo) return redirectToApp("error", error);
+      return jsonError(error, details);
+    };
+
+    const respondSuccess = (data: unknown) => {
+      if (callbackReturnTo) return redirectToApp("connected");
+      return jsonSuccess(data);
+    };
 
     // ── config-status (NO auth required) ────────────────────
     if (isConfigStatusRoute || requestBody?.action === "config-status" || actionParam === "config-status") {
@@ -182,31 +209,76 @@ Deno.serve(async (req) => {
       return jsonOk(status);
     }
 
+    if (req.method === "GET" && metaErrorParam) {
+      console.error("[whatsapp-connect] ❌ Meta OAuth returned error:", {
+        erro_bruto_meta: Object.fromEntries(url.searchParams.entries()),
+        oauth_dialog_redirect_uri: oauthDialogRedirectUri,
+        token_exchange_redirect_uri: oauthDialogRedirectUri,
+        "code recebido": Boolean(codeParam) ? "sim" : "não",
+        "state recebido": Boolean(stateParam) ? "sim" : "não",
+      });
+      const statePayload = await verifyOAuthState(stateParam, META_APP_SECRET).catch(() => null);
+      callbackReturnTo = statePayload?.returnTo || DEFAULT_RETURN_TO;
+      return redirectToApp("error", metaErrorParam);
+    }
+
+    if (req.method === "GET" && codeParam) {
+      console.log("[whatsapp-connect] OAuth callback recebido:", {
+        oauth_dialog_redirect_uri: oauthDialogRedirectUri,
+        token_exchange_redirect_uri: oauthDialogRedirectUri,
+        "code recebido": "sim",
+        "state recebido": Boolean(stateParam) ? "sim" : "não",
+      });
+
+      const statePayload = await verifyOAuthState(stateParam, META_APP_SECRET).catch((error) => {
+        console.error("[whatsapp-connect] ❌ State inválido:", error instanceof Error ? error.message : String(error));
+        return null;
+      });
+
+      if (!statePayload) {
+        return jsonError("State OAuth inválido ou expirado.", {
+          oauth_dialog_redirect_uri: oauthDialogRedirectUri,
+          token_exchange_redirect_uri: oauthDialogRedirectUri,
+          codeReceived: Boolean(codeParam),
+          stateReceived: Boolean(stateParam),
+        });
+      }
+
+      userId = statePayload.userId;
+      callbackReturnTo = statePayload.returnTo;
+      requestBody = {
+        code: codeParam,
+        redirectUri: oauthDialogRedirectUri,
+      };
+    }
+
     // ── Auth ──────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!userId && !authHeader?.startsWith("Bearer ")) {
       console.error("[whatsapp-connect] ❌ No valid auth header. Has header:", Boolean(authHeader));
       return jsonError("Unauthorized - token não fornecido", { _authMissing: true });
     }
 
-    const supabaseAuth = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (!userId) {
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader! } } }
+      );
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-    if (authError || !user) {
-      console.error("[whatsapp-connect] ❌ Auth failed:", authError?.message);
-      return jsonError("Unauthorized - usuário não autenticado", {
-        _authError: authError?.message || "user is null",
-      });
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+      if (authError || !user) {
+        console.error("[whatsapp-connect] ❌ Auth failed:", authError?.message);
+        return jsonError("Unauthorized - usuário não autenticado", {
+          _authError: authError?.message || "user is null",
+        });
+      }
+      userId = user.id;
+      console.log("[whatsapp-connect] ✅ Authenticated user:", userId);
+    } else {
+      console.log("[whatsapp-connect] ✅ User resolved from signed OAuth state:", userId);
     }
-    console.log("[whatsapp-connect] ✅ Authenticated user:", user.id);
-
-    // ── Secrets ──────────────────────────────────────────
-    const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET, metaRedirectUri: META_REDIRECT_URI } = getMetaConfig();
 
     // ── public-config (auth required) ───────────────────
     if (requestBody?.action === "public-config" || actionParam === "public-config") {
