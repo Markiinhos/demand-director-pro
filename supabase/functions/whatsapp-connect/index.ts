@@ -56,7 +56,10 @@ function metaConfigStatus() {
 }
 
 function getOAuthRedirectUri(metaRedirectUri: string) {
-  return metaRedirectUri || OAUTH_CALLBACK_URL;
+  if (metaRedirectUri && metaRedirectUri !== OAUTH_CALLBACK_URL) {
+    console.warn("[whatsapp-connect] META_REDIRECT_URI ignorado para evitar mismatch OAuth:", metaRedirectUri);
+  }
+  return OAUTH_CALLBACK_URL;
 }
 
 function base64UrlEncode(value: Uint8Array | string) {
