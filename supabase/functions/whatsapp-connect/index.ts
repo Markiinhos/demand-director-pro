@@ -251,45 +251,67 @@ Deno.serve(async (req) => {
 
     // ══════════════════════════════════════════════════════
     // STEP 1: Exchange code for token
-    // FB.login() → no redirect_uri needed
-    // OAuth callback → redirect_uri must match
+    // Uses the SAME redirect_uri that was used in FB.login()
     // ══════════════════════════════════════════════════════
     console.log("[whatsapp-connect] LOG code-exchange-start");
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback, "| codeLen:", code.length);
 
+    // Resolve redirect_uri: prefer frontend-provided, fallback to env, then edge function URL
+    const frontendRedirectUri = requestBody?.redirectUri || null;
+    const envRedirectUri = META_REDIRECT_URI || null;
+    const resolvedRedirectUri = frontendRedirectUri || envRedirectUri || (isFromOAuthCallback ? oauthDialogRedirectUri : "");
+
+    console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
+    console.log("[whatsapp-connect] redirect_uri from frontend:", frontendRedirectUri || "(not provided)");
+    console.log("[whatsapp-connect] redirect_uri from env (META_REDIRECT_URI):", envRedirectUri || "(not set)");
+    console.log("[whatsapp-connect] redirect_uri resolved (used for token exchange):", resolvedRedirectUri || "(none - will omit)");
+    console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
+    console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
+
     const baseTokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
 
-    const strategies = isFromOAuthCallback
-      ? [
-          { name: "with redirect_uri", url: `${baseTokenUrl}&redirect_uri=${encodeURIComponent(oauthDialogRedirectUri)}` },
-          { name: "without redirect_uri", url: baseTokenUrl },
-        ]
-      : [
-          { name: "without redirect_uri (FB.login)", url: baseTokenUrl },
-          { name: "with redirect_uri (fallback)", url: `${baseTokenUrl}&redirect_uri=${encodeURIComponent(oauthDialogRedirectUri)}` },
-        ];
+    // Build token exchange URL: always include redirect_uri if we have one
+    let tokenExchangeUrl = baseTokenUrl;
+    if (resolvedRedirectUri) {
+      tokenExchangeUrl = `${baseTokenUrl}&redirect_uri=${encodeURIComponent(resolvedRedirectUri)}`;
+    }
+
+    console.log("[whatsapp-connect] Token exchange URL (masked):", tokenExchangeUrl.replace(/client_secret=[^&]+/, "client_secret=***").replace(/code=[^&]+/, "code=***"));
+
+    const tokenRes = await fetch(tokenExchangeUrl);
+    const tokenResData = await tokenRes.json();
 
     let tokenData: Record<string, unknown> | null = null;
     let lastTokenError = "";
 
-    for (const s of strategies) {
-      console.log(`[whatsapp-connect] Token exchange strategy: "${s.name}"`);
-      const res = await fetch(s.url);
-      const data = await res.json();
-      if (res.ok && data.access_token) {
-        console.log(`[whatsapp-connect] ✅ "${s.name}" SUCCESS, token length:`, data.access_token.length);
-        tokenData = data;
-        break;
-      } else {
-        lastTokenError = data?.error?.message || "Unknown";
-        console.warn(`[whatsapp-connect] ⚠ "${s.name}" failed:`, lastTokenError);
+    if (tokenRes.ok && tokenResData.access_token) {
+      console.log("[whatsapp-connect] ✅ Token exchange SUCCESS, token length:", tokenResData.access_token.length);
+      tokenData = tokenResData;
+    } else {
+      lastTokenError = tokenResData?.error?.message || JSON.stringify(tokenResData?.error) || "Unknown";
+      console.error("[whatsapp-connect] ❌ Token exchange FAILED:", lastTokenError);
+      console.error("[whatsapp-connect] Full error response:", JSON.stringify(tokenResData));
+
+      // If the first attempt failed with redirect_uri, try WITHOUT redirect_uri as fallback
+      if (resolvedRedirectUri) {
+        console.log("[whatsapp-connect] Retrying token exchange WITHOUT redirect_uri...");
+        const retryRes = await fetch(baseTokenUrl);
+        const retryData = await retryRes.json();
+        if (retryRes.ok && retryData.access_token) {
+          console.log("[whatsapp-connect] ✅ Retry WITHOUT redirect_uri SUCCESS");
+          tokenData = retryData;
+        } else {
+          const retryError = retryData?.error?.message || JSON.stringify(retryData?.error) || "Unknown";
+          console.error("[whatsapp-connect] ❌ Retry WITHOUT redirect_uri FAILED:", retryError);
+          lastTokenError = `Com redirect_uri: ${lastTokenError} | Sem redirect_uri: ${retryError}`;
+        }
       }
     }
 
     if (!tokenData?.access_token) {
-      console.error("[whatsapp-connect] ❌ ALL token strategies FAILED:", lastTokenError);
+      console.error("[whatsapp-connect] ❌ ALL token exchange attempts FAILED:", lastTokenError);
       try {
-        await supabase.from("whatsapp_logs").insert({ event_type: "token_error", user_id: userId, error_message: lastTokenError, payload: { strategies: strategies.map(s => s.name) } });
+        await supabase.from("whatsapp_logs").insert({ event_type: "token_error", user_id: userId, error_message: lastTokenError, payload: { resolvedRedirectUri, frontendRedirectUri, envRedirectUri } });
       } catch (_) { /* ignore */ }
       return respondError(`Token exchange falhou: ${lastTokenError}`);
     }
