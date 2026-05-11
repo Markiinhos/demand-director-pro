@@ -6,6 +6,13 @@ const corsHeaders = {
 };
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
+const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
+const OAUTH_CALLBACK_URL = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
+const DEFAULT_RETURN_TO = "https://demand-director-pro.lovable.app/whatsapp";
+const ALLOWED_RETURN_HOSTS = new Set([
+  "demand-director-pro.lovable.app",
+  "id-preview--c898cc54-01d4-433a-abb1-d2b9cf213f67.lovable.app",
+]);
 
 type ConnectRequestBody = {
   action?: string;
@@ -13,6 +20,14 @@ type ConnectRequestBody = {
   wabaId?: string;
   phoneNumberId?: string;
   redirectUri?: string;
+  returnTo?: string;
+};
+
+type OAuthStatePayload = {
+  userId: string;
+  returnTo: string;
+  nonce: string;
+  exp: number;
 };
 
 type GranularScope = {
