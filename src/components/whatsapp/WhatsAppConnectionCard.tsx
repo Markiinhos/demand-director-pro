@@ -11,6 +11,12 @@ import { toast } from "sonner";
 // ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
+const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID || "";
+const META_REDIRECT_URI =
+  import.meta.env.VITE_META_REDIRECT_URI ||
+  (SUPABASE_PROJECT_ID
+    ? `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/whatsapp-connect`
+    : "");
 
 // ── FB SDK Loader ────────────────────────────────────────
 declare global {
@@ -158,6 +164,7 @@ export function WhatsAppConnectionCard() {
     const loginOptions: Record<string, unknown> = {
       response_type: "code",
       override_default_response_type: true,
+      redirect_uri: META_REDIRECT_URI,
       extras: {
         setup: {},
         featureType: "",
@@ -179,12 +186,14 @@ export function WhatsAppConnectionCard() {
         const code = response.authResponse.code;
         const session = sessionInfoRef.current;
 
+        console.log("🔗 [WhatsApp] redirect_uri (frontend):", META_REDIRECT_URI);
+
         connectViaEmbeddedSignup.mutate(
           {
             code,
             wabaId: session.waba_id,
             phoneNumberId: session.phone_number_id,
-            redirectUri: window.location.origin + "/",
+            redirectUri: META_REDIRECT_URI,
           },
           {
             onSettled: () => setIsConnecting(false),
