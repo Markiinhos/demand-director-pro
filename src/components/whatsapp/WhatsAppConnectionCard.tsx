@@ -6,6 +6,7 @@ import {
   MessageSquare, CheckCircle2, AlertCircle, Loader2, Unlink,
   RefreshCw, Phone, Send, ShieldCheck, Copy,
 } from "lucide-react";
+import { toast } from "sonner";
 
 // ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
@@ -103,12 +104,10 @@ export function WhatsAppConnectionCard() {
                 <Button
                   size="lg"
                   onClick={handleEmbeddedSignup}
-                  disabled={isBusy || !sdkReady}
+                  disabled={isBusy}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 px-8 text-sm font-semibold shadow-md shadow-emerald-500/20 transition-all"
                 >
                   {isBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : !sdkReady ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -116,7 +115,7 @@ export function WhatsAppConnectionCard() {
                       <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.96 7.96 0 01-4.11-1.14l-.29-.17-3.06.8.82-2.99-.19-.3A7.96 7.96 0 014 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z" />
                     </svg>
                   )}
-                  {isBusy ? "Conectando..." : !sdkReady ? "Carregando SDK..." : "Conectar WhatsApp Business"}
+                  {isBusy ? "Conectando..." : "Conectar WhatsApp Business"}
                 </Button>
               ) : (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs text-amber-700 text-left space-y-2">
