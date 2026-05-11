@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,203 +6,38 @@ import {
   MessageSquare, CheckCircle2, AlertCircle, Loader2, Unlink,
   RefreshCw, Phone, Send, ShieldCheck, Copy,
 } from "lucide-react";
-import { toast } from "sonner";
 
 // ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-
-// ── FB SDK Loader ────────────────────────────────────────
-declare global {
-  interface Window {
-    fbAsyncInit: () => void;
-    FB: {
-      init: (params: Record<string, unknown>) => void;
-      login: (
-        cb: (response: FBLoginResponse) => void,
-        opts: Record<string, unknown>
-      ) => void;
-    };
-  }
-}
-
-interface FBLoginResponse {
-  authResponse?: {
-    code?: string;
-    accessToken?: string;
-  };
-  status: string;
-}
-
-function loadFacebookSDK(appId: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // ── DIAGNÓSTICO: domínio que o Facebook SDK enxerga ──
-    console.group("🔍 [FB SDK] Diagnóstico de domínio");
-    console.log("window.location.origin :", window.location.origin);
-    console.log("window.location.hostname:", window.location.hostname);
-    console.log("window.location.href    :", window.location.href);
-    console.log("document.domain         :", document.domain);
-    console.log(
-      "👉 Domínio para cadastrar na Meta (sem https:// e sem /):",
-      window.location.hostname
-    );
-    console.groupEnd();
-
-    if (window.FB) {
-      resolve();
-      return;
-    }
-
-    window.fbAsyncInit = function () {
-      window.FB.init({
-        appId,
-        cookie: true,
-        xfbml: true,
-        version: "v22.0",
-      });
-      console.log("✅ [FB SDK] Inicializado com sucesso no domínio:", window.location.hostname);
-      resolve();
-    };
-
-    if (document.getElementById("facebook-jssdk")) {
-      // Script tag exists but SDK not loaded yet — wait for init
-      if (!window.FB) {
-        const check = setInterval(() => {
-          if (window.FB) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 100);
-        setTimeout(() => { clearInterval(check); reject(new Error("FB SDK timeout")); }, 10000);
-      }
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "facebook-jssdk";
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => reject(new Error("Failed to load Facebook SDK"));
-    document.body.appendChild(script);
-  });
-}
 
 // ═══════════════════════════════════════════════════════════
 export function WhatsAppConnectionCard() {
   const {
     connection, isLoading, isConnected, templates,
     metaConfig, isMetaConfigLoading,
-    connectViaEmbeddedSignup, disconnect, reconnect, testSend,
+    initiateEmbeddedSignup, connectViaEmbeddedSignup, disconnect, reconnect, testSend,
   } = useWhatsAppConnection();
 
   const [isConnecting, setIsConnecting] = useState(false);
-  const [sdkReady, setSdkReady] = useState(false);
-  // Ref to store session info from the postMessage listener
-  const sessionInfoRef = useRef<{
-    waba_id?: string;
-    phone_number_id?: string;
-  }>({});
 
   const activeMetaAppId = metaConfig?.appId || META_APP_ID;
   const activeMetaConfigId = metaConfig?.configId || META_CONFIG_ID;
   const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId && activeMetaConfigId);
 
-  // ── Load Facebook SDK ──────────────────────────────────
-  useEffect(() => {
-    setSdkReady(false);
-    if (!activeMetaAppId) return;
-    loadFacebookSDK(activeMetaAppId)
-      .then(() => setSdkReady(true))
-      .catch(() => { /* SDK failed, user can use manual mode */ });
-  }, [activeMetaAppId]);
-
-  // ── Session Info Listener ──────────────────────────────
-  useEffect(() => {
-    const listener = (event: MessageEvent) => {
-      if (
-        !event.origin?.endsWith("facebook.com") &&
-        !event.origin?.endsWith("web.facebook.com")
-      )
-        return;
-
-      try {
-        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (data.type === "WA_EMBEDDED_SIGNUP") {
-          if (data.event === "FINISH" && data.data) {
-            sessionInfoRef.current = {
-              waba_id: data.data.waba_id,
-              phone_number_id: data.data.phone_number_id,
-            };
-          }
-        }
-      } catch {
-        // Ignore non-JSON messages
-      }
-    };
-
-    window.addEventListener("message", listener);
-    return () => window.removeEventListener("message", listener);
-  }, []);
-
   // ── Launch Embedded Signup ─────────────────────────────
   const handleEmbeddedSignup = useCallback(() => {
-    if (!window.FB) {
-      toast.error("Facebook SDK não carregou. Tente recarregar a página.");
-      return;
-    }
-
     setIsConnecting(true);
-    sessionInfoRef.current = {};
-
-    const redirectUri = `${window.location.origin}/`;
-    console.log("🔗 [WhatsApp] redirect_uri (frontend):", redirectUri);
-
-    const loginOptions: Record<string, unknown> = {
-      response_type: "code",
-      override_default_response_type: true,
-      redirect_uri: redirectUri,
-      extras: {
-        setup: {},
-        featureType: "",
-        sessionInfoVersion: "3",
-      },
-    };
-
-    // If config_id is set, use it (recommended by Meta)
-    if (activeMetaConfigId) {
-      loginOptions.config_id = activeMetaConfigId;
-    } else {
-      // Fallback: use scope-based signup
-      loginOptions.scope =
-        "business_management,whatsapp_business_management,whatsapp_business_messaging";
-    }
-
-    window.FB.login((response: FBLoginResponse) => {
-      if (response.authResponse?.code) {
-        const code = response.authResponse.code;
-        const session = sessionInfoRef.current;
-
-        connectViaEmbeddedSignup.mutate(
-          {
-            code,
-            wabaId: session.waba_id,
-            phoneNumberId: session.phone_number_id,
-            redirectUri,
-          },
-          {
-            onSettled: () => setIsConnecting(false),
-          }
-        );
-      } else {
-        setIsConnecting(false);
-        // User cancelled — don't show error
-        if (response.status !== "connected") {
-          toast.info("Conexão cancelada.");
-        }
+    initiateEmbeddedSignup.mutate(
+      { returnTo: `${window.location.origin}/whatsapp` },
+      {
+        onSuccess: ({ oauthUrl }) => {
+          window.location.assign(oauthUrl);
+        },
+        onSettled: () => setIsConnecting(false),
       }
-    }, loginOptions);
-  }, [activeMetaConfigId, connectViaEmbeddedSignup]);
+    );
+  }, [initiateEmbeddedSignup]);
 
   const copyWebhookToken = () => {
     if (connection?.webhook_verify_token) {
@@ -220,7 +55,7 @@ export function WhatsAppConnectionCard() {
 
   const currentStatus = statusConfig[connection?.status as keyof typeof statusConfig] || statusConfig.disconnected;
   const StatusIcon = currentStatus.icon;
-  const isBusy = isConnecting || connectViaEmbeddedSignup.isPending;
+  const isBusy = isConnecting || initiateEmbeddedSignup.isPending || connectViaEmbeddedSignup.isPending;
 
   return (
     <div className="space-y-4">
