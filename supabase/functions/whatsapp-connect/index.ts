@@ -24,8 +24,13 @@ function getMetaConfig() {
   const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
   const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
   const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const defaultRedirect = supabaseUrl
+    ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/whatsapp-connect`
+    : "";
+  const metaRedirectUri = Deno.env.get("META_REDIRECT_URI") || defaultRedirect;
 
-  return { metaAppId, metaConfigId, metaAppSecret };
+  return { metaAppId, metaConfigId, metaAppSecret, metaRedirectUri };
 }
 
 function metaConfigStatus() {
@@ -126,7 +131,7 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] ✅ Authenticated user:", user.id);
 
     // ── Secrets ──────────────────────────────────────────
-    const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
+    const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET, metaRedirectUri: META_REDIRECT_URI } = getMetaConfig();
 
     // ── public-config (auth required) ───────────────────
     if (requestBody?.action === "public-config" || actionParam === "public-config") {
@@ -172,33 +177,32 @@ Deno.serve(async (req) => {
     }
 
     // ── Step 1: Exchange code for Business Access Token ──
-    // Meta Embedded Signup docs: exchange code WITHOUT redirect_uri
-    // https://developers.facebook.com/docs/whatsapp/embedded-signup
+    // The redirect_uri MUST be identical to the one used in the FB.login call.
+    const effectiveRedirectUri = redirectUri || META_REDIRECT_URI;
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
       codeLength: code.length,
       codePrefix: code.substring(0, 10) + "...",
-      codeSuffix: "..." + code.substring(code.length - 10),
       wabaId: wabaId || "(not provided)",
       phoneNumberId: phoneNumberId || "(not provided)",
-      redirectUri: redirectUri || "(not provided)",
+      redirectUri_fromClient: redirectUri || "(none)",
+      META_REDIRECT_URI_env: META_REDIRECT_URI || "(none)",
+      effectiveRedirectUri,
       META_APP_ID_used: META_APP_ID.substring(0, 6) + "...",
       META_APP_SECRET_present: Boolean(META_APP_SECRET),
-      META_APP_SECRET_length: META_APP_SECRET.length,
     });
 
-    // Strategy: try without redirect_uri first (per Meta docs),
-    // then with empty redirect_uri, then with page URL as fallback
     const baseUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
-    
-    const strategies = [
-      { name: "no redirect_uri", url: baseUrl },
-      { name: "empty redirect_uri", url: `${baseUrl}&redirect_uri=` },
-    ];
-    
-    // If client sent a redirectUri, also try that
-    if (redirectUri) {
-      strategies.push({ name: `redirect_uri=${redirectUri}`, url: `${baseUrl}&redirect_uri=${encodeURIComponent(redirectUri)}` });
+
+    // Primary strategy: use the fixed redirect_uri (matches frontend FB.login).
+    // Fallbacks kept for resilience.
+    const strategies: { name: string; url: string }[] = [];
+    if (effectiveRedirectUri) {
+      strategies.push({
+        name: `redirect_uri=${effectiveRedirectUri}`,
+        url: `${baseUrl}&redirect_uri=${encodeURIComponent(effectiveRedirectUri)}`,
+      });
     }
+    strategies.push({ name: "no redirect_uri", url: baseUrl });
 
     let tokenData: Record<string, unknown> | null = null;
     let lastError = "";
