@@ -180,6 +180,7 @@ export function useWhatsAppConnection() {
         codeLength: input.code?.length,
         wabaId: input.wabaId,
         phoneNumberId: input.phoneNumberId,
+        redirectUri: input.redirectUri,
       });
 
       // invokeEdgeFunction handles both HTTP and logical errors
