@@ -168,6 +168,34 @@ export function useWhatsAppConnection() {
     retry: false,
   });
 
+  // ── Embedded Signup — explicit OAuth redirect flow ──────
+  const initiateEmbeddedSignup = useMutation({
+    mutationFn: async (input?: { returnTo?: string }) => {
+      const result = await invokeEdgeFunction<{
+        oauthUrl: string;
+        redirectUri: string;
+      }>("whatsapp-connect", {
+        action: "oauth-url",
+        returnTo: input?.returnTo || `${window.location.origin}/whatsapp`,
+      });
+
+      console.log("🔗 [WhatsApp] OAuth manual criado:", {
+        redirectUri: result.redirectUri,
+        hasOauthUrl: Boolean(result.oauthUrl),
+      });
+
+      if (!result.oauthUrl) {
+        throw new Error("URL OAuth da Meta não foi gerada.");
+      }
+
+      return result;
+    },
+    onError: (e) => {
+      console.error("❌ [WhatsApp] Erro ao iniciar OAuth:", e.message);
+      toast.error("Erro ao iniciar conexão: " + e.message);
+    },
+  });
+
   // ── Embedded Signup — primary flow ────────────────────
   const connectViaEmbeddedSignup = useMutation({
     mutationFn: async (input: {
@@ -346,6 +374,7 @@ export function useWhatsAppConnection() {
     metaConfig: metaConfig.data ?? null,
     isMetaConfigLoading: metaConfig.isLoading,
     refetchMetaConfig: metaConfig.refetch,
+    initiateEmbeddedSignup,
     connectViaEmbeddedSignup,
     connectManual,
     disconnect,
