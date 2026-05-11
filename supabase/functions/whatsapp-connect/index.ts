@@ -321,8 +321,8 @@ Deno.serve(async (req) => {
       console.log("[whatsapp-connect] OAuth URL gerada:", {
         oauth_dialog_redirect_uri: oauthDialogRedirectUri,
         token_exchange_redirect_uri: oauthDialogRedirectUri,
-        code_recebido: "não",
-        state_recebido: "não",
+        "code recebido": "não",
+        "state recebido": "não",
         appIdPresent: Boolean(META_APP_ID),
         configIdPresent: Boolean(META_CONFIG_ID),
         returnTo: safeReturnTo(requestBody?.returnTo),
@@ -356,8 +356,8 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
       oauth_dialog_redirect_uri: oauthDialogRedirectUri,
       token_exchange_redirect_uri: effectiveRedirectUri,
-      code_recebido: code ? "sim" : "não",
-      state_recebido: stateParam ? "sim" : "não",
+      "code recebido": code ? "sim" : "não",
+      "state recebido": stateParam ? "sim" : "não",
       codeLength: code.length,
       codePrefix: code.substring(0, 10) + "...",
       wabaId: wabaId || "(not provided)",
@@ -393,6 +393,7 @@ Deno.serve(async (req) => {
         const errMsg = data?.error?.message || "Unknown error";
         console.warn(`[whatsapp-connect] ⚠ Strategy "${strategy.name}" failed:`, {
           message: errMsg,
+          erro_bruto_meta: data?.error || data,
           fullMetaError: data?.error || data,
           redirectUriSentToMeta: effectiveRedirectUri,
         });
