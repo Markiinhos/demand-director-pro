@@ -296,12 +296,36 @@ Deno.serve(async (req) => {
       return jsonOk({ appId: META_APP_ID, configId: META_CONFIG_ID });
     }
 
-    if (!META_APP_ID || !META_APP_SECRET) {
+    if (!META_APP_ID || !META_APP_SECRET || !META_CONFIG_ID) {
       console.error("[whatsapp-connect] ❌ Missing required Meta backend config:", metaConfigStatus());
       return jsonError(
-        "META_APP_ID e META_APP_SECRET não configurados no servidor. Configure com: npx supabase secrets set META_APP_ID=xxx META_APP_SECRET=xxx",
+        "META_APP_ID, META_APP_SECRET e VITE_META_CONFIG_ID precisam estar configurados no servidor.",
         metaConfigStatus()
       );
+    }
+
+    // ── Build explicit Meta OAuth URL (auth required) ─────
+    if (requestBody?.action === "oauth-url" || actionParam === "oauth-url") {
+      const state = await createOAuthState(userId, requestBody?.returnTo || DEFAULT_RETURN_TO, META_APP_SECRET);
+      const oauthUrl = new URL(META_OAUTH_DIALOG);
+      oauthUrl.searchParams.set("client_id", META_APP_ID);
+      oauthUrl.searchParams.set("redirect_uri", oauthDialogRedirectUri);
+      oauthUrl.searchParams.set("config_id", META_CONFIG_ID);
+      oauthUrl.searchParams.set("response_type", "code");
+      oauthUrl.searchParams.set("override_default_response_type", "true");
+      oauthUrl.searchParams.set("state", state);
+
+      console.log("[whatsapp-connect] OAuth URL gerada:", {
+        oauth_dialog_redirect_uri: oauthDialogRedirectUri,
+        token_exchange_redirect_uri: oauthDialogRedirectUri,
+        code_recebido: "não",
+        state_recebido: "não",
+        appIdPresent: Boolean(META_APP_ID),
+        configIdPresent: Boolean(META_CONFIG_ID),
+        returnTo: safeReturnTo(requestBody?.returnTo),
+      });
+
+      return jsonOk({ oauthUrl: oauthUrl.toString(), redirectUri: oauthDialogRedirectUri });
     }
 
     console.log("[whatsapp-connect] Meta config OK. Processing connect request...");
@@ -312,11 +336,11 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { code, wabaId, phoneNumberId, redirectUri } = requestBody || {};
+    const { code, wabaId, phoneNumberId } = requestBody || {};
 
     if (!code) {
       console.error("[whatsapp-connect] ❌ No code in request body. Body keys:", requestBody ? Object.keys(requestBody) : "null");
-      return jsonError("Código de autorização (code) ausente. Certifique-se de completar o fluxo de login do Facebook.", {
+      return respondError("Código de autorização (code) ausente. Certifique-se de completar o fluxo de login do Facebook.", {
         receivedBodyKeys: requestBody ? Object.keys(requestBody) : null,
         bodyWasNull: requestBody === null,
         rawBodyPreview,
@@ -324,19 +348,17 @@ Deno.serve(async (req) => {
     }
 
     // ── Step 1: Exchange code for Business Access Token ──
-    // The redirect_uri MUST be identical to the one used in the FB.login call.
-    if (!redirectUri) {
-      console.error("[whatsapp-connect] ❌ Missing redirectUri from frontend. Refusing token exchange to avoid OAuth mismatch.");
-      return jsonError("redirectUri ausente. O frontend precisa enviar window.location.origin + '/'.");
-    }
-
-    const effectiveRedirectUri = redirectUri;
+    // The redirect_uri MUST be identical to the one used in the OAuth dialog URL.
+    const effectiveRedirectUri = oauthDialogRedirectUri;
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
+      oauth_dialog_redirect_uri: oauthDialogRedirectUri,
+      token_exchange_redirect_uri: effectiveRedirectUri,
+      code_recebido: code ? "sim" : "não",
+      state_recebido: stateParam ? "sim" : "não",
       codeLength: code.length,
       codePrefix: code.substring(0, 10) + "...",
       wabaId: wabaId || "(not provided)",
       phoneNumberId: phoneNumberId || "(not provided)",
-      redirectUri_fromClient: redirectUri,
       META_REDIRECT_URI_env: META_REDIRECT_URI || "(none)",
       redirectUri_sentToMeta: effectiveRedirectUri,
       META_APP_ID_used: META_APP_ID.substring(0, 6) + "...",
