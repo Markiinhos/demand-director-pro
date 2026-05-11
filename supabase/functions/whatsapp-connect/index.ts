@@ -12,6 +12,7 @@ const DEFAULT_RETURN_TO = "https://demand-director-pro.lovable.app/whatsapp";
 const ALLOWED_RETURN_HOSTS = new Set([
   "demand-director-pro.lovable.app",
   "id-preview--c898cc54-01d4-433a-abb1-d2b9cf213f67.lovable.app",
+  "localhost",
 ]);
 
 type ConnectRequestBody = {
@@ -90,7 +91,10 @@ async function signStatePayload(payload: string, secret: string) {
 function safeReturnTo(returnTo?: string) {
   try {
     const parsed = new URL(returnTo || DEFAULT_RETURN_TO);
-    if (parsed.protocol === "https:" && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
+    if (
+      (parsed.protocol === "https:" || (parsed.protocol === "http:" && parsed.hostname === "localhost")) &&
+      ALLOWED_RETURN_HOSTS.has(parsed.hostname)
+    ) {
       return parsed.toString();
     }
   } catch (_) { /* use default */ }
@@ -152,6 +156,7 @@ Deno.serve(async (req) => {
 
     console.log("[whatsapp-connect] ════════════════════════════════════");
     console.log("[whatsapp-connect] Incoming request:", req.method, url.pathname);
+    console.log("[whatsapp-connect] Full URL search params:", url.search);
     console.log("[whatsapp-connect] Content-Type:", req.headers.get("content-type"));
     console.log("[whatsapp-connect] Auth present:", Boolean(req.headers.get("Authorization")));
 
@@ -187,11 +192,15 @@ Deno.serve(async (req) => {
 
     const redirectToApp = (status: "connected" | "error", message?: string) => {
       const returnUrl = new URL(callbackReturnTo || DEFAULT_RETURN_TO);
-      returnUrl.searchParams.set("whatsapp", status);
-      if (message) returnUrl.searchParams.set("message", message.substring(0, 180));
+      returnUrl.searchParams.set("whatsapp_connected", status === "connected" ? "true" : "false");
+      if (status === "error") {
+        returnUrl.searchParams.set("whatsapp_error", message?.substring(0, 180) || "unknown");
+      }
+      const finalUrl = returnUrl.toString();
+      console.log("[whatsapp-connect] LOG redirect-back-url:", finalUrl);
       return new Response(null, {
         status: 302,
-        headers: { ...corsHeaders, Location: returnUrl.toString() },
+        headers: { ...corsHeaders, Location: finalUrl },
       });
     };
 
@@ -225,12 +234,30 @@ Deno.serve(async (req) => {
       return redirectToApp("error", metaErrorParam);
     }
 
+    // ═══ OAUTH CALLBACK (GET with code) ═════════════════════
     if (req.method === "GET" && codeParam) {
+      console.log("[whatsapp-connect] LOG callback-received");
+      console.log("[whatsapp-connect] LOG has-code:", Boolean(codeParam));
+      console.log("[whatsapp-connect] LOG has-state:", Boolean(stateParam));
+
+      // Also capture any extra params Meta may send
+      const extraParams: Record<string, string> = {};
+      for (const [key, val] of url.searchParams.entries()) {
+        if (!["code", "state", "error", "error_message"].includes(key)) {
+          extraParams[key] = val;
+        }
+      }
+      if (Object.keys(extraParams).length > 0) {
+        console.log("[whatsapp-connect] Extra callback params from Meta:", JSON.stringify(extraParams));
+      }
+
       console.log("[whatsapp-connect] OAuth callback recebido:", {
         oauth_dialog_redirect_uri: oauthDialogRedirectUri,
         token_exchange_redirect_uri: oauthDialogRedirectUri,
         "code recebido": "sim",
         "state recebido": Boolean(stateParam) ? "sim" : "não",
+        codeLength: codeParam.length,
+        codePrefix: codeParam.substring(0, 8) + "...",
       });
 
       const statePayload = await verifyOAuthState(stateParam, META_APP_SECRET).catch((error) => {
@@ -239,20 +266,28 @@ Deno.serve(async (req) => {
       });
 
       if (!statePayload) {
-        return jsonError("State OAuth inválido ou expirado.", {
-          oauth_dialog_redirect_uri: oauthDialogRedirectUri,
-          token_exchange_redirect_uri: oauthDialogRedirectUri,
-          codeReceived: Boolean(codeParam),
-          stateReceived: Boolean(stateParam),
-        });
+        console.error("[whatsapp-connect] ❌ State verification FAILED. State param present:", Boolean(stateParam));
+        callbackReturnTo = DEFAULT_RETURN_TO;
+        return redirectToApp("error", "State OAuth inválido ou expirado. Tente novamente.");
       }
 
       userId = statePayload.userId;
       callbackReturnTo = statePayload.returnTo;
+      console.log("[whatsapp-connect] ✅ State verified. userId:", userId, "| returnTo:", callbackReturnTo);
+
+      // Extract waba_id and phone_number_id from URL if Meta sent them
+      const urlWabaId = url.searchParams.get("waba_id") || extraParams["waba_id"] || undefined;
+      const urlPhoneNumberId = url.searchParams.get("phone_number_id") || extraParams["phone_number_id"] || undefined;
+
       requestBody = {
         code: codeParam,
         redirectUri: oauthDialogRedirectUri,
+        wabaId: urlWabaId,
+        phoneNumberId: urlPhoneNumberId,
       };
+
+      if (urlWabaId) console.log("[whatsapp-connect] LOG waba_id from URL:", urlWabaId);
+      if (urlPhoneNumberId) console.log("[whatsapp-connect] LOG phone_number_id from URL:", urlPhoneNumberId);
     }
 
     // ── Auth ──────────────────────────────────────────────
@@ -320,9 +355,6 @@ Deno.serve(async (req) => {
 
       console.log("[whatsapp-connect] OAuth URL gerada:", {
         oauth_dialog_redirect_uri: oauthDialogRedirectUri,
-        token_exchange_redirect_uri: oauthDialogRedirectUri,
-        "code recebido": "não",
-        "state recebido": "não",
         appIdPresent: Boolean(META_APP_ID),
         configIdPresent: Boolean(META_CONFIG_ID),
         returnTo: safeReturnTo(requestBody?.returnTo),
@@ -351,87 +383,106 @@ Deno.serve(async (req) => {
     }
 
     // ── Step 1: Exchange code for Business Access Token ──
-    // The redirect_uri MUST be identical to the one used in the OAuth dialog URL.
     const effectiveRedirectUri = oauthDialogRedirectUri;
+    console.log("[whatsapp-connect] LOG code-exchange-start");
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
       oauth_dialog_redirect_uri: oauthDialogRedirectUri,
       token_exchange_redirect_uri: effectiveRedirectUri,
-      "code recebido": code ? "sim" : "não",
-      "state recebido": stateParam ? "sim" : "não",
       codeLength: code.length,
-      codePrefix: code.substring(0, 10) + "...",
+      codePrefix: code.substring(0, 8) + "...",
       wabaId: wabaId || "(not provided)",
       phoneNumberId: phoneNumberId || "(not provided)",
-      META_REDIRECT_URI_env: META_REDIRECT_URI || "(none)",
       redirectUri_sentToMeta: effectiveRedirectUri,
-      META_APP_ID_used: META_APP_ID.substring(0, 6) + "...",
-      META_APP_SECRET_present: Boolean(META_APP_SECRET),
     });
 
-    const baseUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
+    const tokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(effectiveRedirectUri)}`;
 
-    const strategies: { name: string; url: string }[] = [
-      {
-        name: `redirect_uri=${effectiveRedirectUri}`,
-        url: `${baseUrl}&redirect_uri=${encodeURIComponent(effectiveRedirectUri)}`,
-      },
-    ];
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData = await tokenRes.json();
 
-    let tokenData: Record<string, unknown> | null = null;
-    let lastError = "";
-
-    for (const strategy of strategies) {
-      console.log(`[whatsapp-connect] Trying token exchange strategy: "${strategy.name}"`);
-      const tokenRes = await fetch(strategy.url);
-      const data = await tokenRes.json();
-      
-      if (tokenRes.ok && data.access_token) {
-        console.log(`[whatsapp-connect] ✅ Strategy "${strategy.name}" SUCCEEDED! Token length:`, data.access_token.length);
-        tokenData = data;
-        break;
-      } else {
-        const errMsg = data?.error?.message || "Unknown error";
-        console.warn(`[whatsapp-connect] ⚠ Strategy "${strategy.name}" failed:`, {
-          message: errMsg,
-          erro_bruto_meta: data?.error || data,
-          fullMetaError: data?.error || data,
-          redirectUriSentToMeta: effectiveRedirectUri,
-        });
-        lastError = errMsg;
-      }
-    }
-
-    if (!tokenData?.access_token) {
-      console.error("[whatsapp-connect] ❌ ALL token exchange strategies FAILED. Last error:", lastError);
+    if (!tokenRes.ok || !tokenData?.access_token) {
+      const errMsg = tokenData?.error?.message || "Unknown error";
+      console.error("[whatsapp-connect] ❌ Token exchange FAILED:", {
+        message: errMsg,
+        erro_bruto_meta: tokenData?.error || tokenData,
+        httpStatus: tokenRes.status,
+        redirectUriSentToMeta: effectiveRedirectUri,
+      });
 
       try {
         await supabase.from("whatsapp_logs").insert({
           event_type: "embedded_signup_token_error",
           user_id: userId,
-          payload: { lastError, strategiesAttempted: strategies.map(s => s.name) },
-          error_message: lastError,
+          payload: { lastError: errMsg, httpStatus: tokenRes.status },
+          error_message: errMsg,
         });
       } catch (logErr) {
         console.error("[whatsapp-connect] Failed to log error to DB:", logErr);
       }
 
-      return respondError(`Token exchange falhou: ${lastError}`, {
-        strategiesAttempted: strategies.map(s => s.name),
-      });
+      return respondError(`Token exchange falhou: ${errMsg}`);
     }
+
+    console.log("[whatsapp-connect] LOG code-exchange-success");
     console.log("[whatsapp-connect] ✅ Token exchange SUCCESS, token length:", (tokenData.access_token as string).length);
 
     const accessToken = tokenData.access_token;
 
-    // ── Step 2: Get phone number details ──────────────────
+    // ── Step 2: Resolve WABA ID and Phone Number ID ──────
     let phoneNumber = "";
     let displayName = "";
     let resolvedPhoneNumberId = phoneNumberId;
     let resolvedWabaId = wabaId;
 
-    // If we got the waba_id but not the phone_number_id, fetch phone numbers
+    // Step 2a: Always try debug_token first to get WABA + phone from scopes
+    console.log("[whatsapp-connect] LOG graph-waba-fetch-start");
+    console.log("[whatsapp-connect] Step 2a: Fetching WABA/phone from debug_token...");
+    try {
+      const debugRes = await fetch(
+        `${GRAPH_API}/debug_token?input_token=${accessToken}&access_token=${META_APP_ID}|${META_APP_SECRET}`
+      );
+      const debugData = await debugRes.json();
+      console.log("[whatsapp-connect] debug_token response:", JSON.stringify(debugData)?.substring(0, 800));
+
+      const granularScopes: GranularScope[] = Array.isArray(debugData?.data?.granular_scopes)
+        ? debugData.data.granular_scopes
+        : [];
+
+      console.log("[whatsapp-connect] Granular scopes found:", granularScopes.length);
+      for (const scope of granularScopes) {
+        console.log("[whatsapp-connect]   scope:", scope.permission, "→ target_ids:", scope.target_ids);
+      }
+
+      // Get WABA from whatsapp_business_management scope
+      if (!resolvedWabaId) {
+        const waScope = granularScopes.find((s) =>
+          s.permission === "whatsapp_business_management"
+        );
+        if (waScope?.target_ids?.[0]) {
+          resolvedWabaId = waScope.target_ids[0];
+          console.log("[whatsapp-connect] ✅ Found WABA ID from debug_token:", resolvedWabaId);
+        }
+      }
+
+      // Get phone number ID from whatsapp_business_messaging scope
+      if (!resolvedPhoneNumberId) {
+        const msgScope = granularScopes.find((s) =>
+          s.permission === "whatsapp_business_messaging"
+        );
+        if (msgScope?.target_ids?.[0]) {
+          resolvedPhoneNumberId = msgScope.target_ids[0];
+          console.log("[whatsapp-connect] ✅ Found phone number ID from debug_token:", resolvedPhoneNumberId);
+        }
+      }
+
+      console.log("[whatsapp-connect] LOG graph-waba-fetch-success");
+    } catch (e: unknown) {
+      console.error("[whatsapp-connect] debug_token error:", e instanceof Error ? e.message : e);
+    }
+
+    // Step 2b: If we have WABA but not phone, fetch phone numbers from WABA
     if (resolvedWabaId && !resolvedPhoneNumberId) {
-      console.log("[whatsapp-connect] Step 2a: Fetching phone numbers from WABA:", resolvedWabaId);
+      console.log("[whatsapp-connect] Step 2b: Fetching phone numbers from WABA:", resolvedWabaId);
       try {
         const phonesRes = await fetch(
           `${GRAPH_API}/${resolvedWabaId}/phone_numbers?access_token=${accessToken}`
@@ -442,23 +493,24 @@ Deno.serve(async (req) => {
           resolvedPhoneNumberId = phonesData.data[0].id;
           phoneNumber = phonesData.data[0].display_phone_number || "";
           displayName = phonesData.data[0].verified_name || "";
-          console.log("[whatsapp-connect] ✅ Found phone:", resolvedPhoneNumberId, phoneNumber, displayName);
+          console.log("[whatsapp-connect] ✅ Found phone from WABA:", resolvedPhoneNumberId, phoneNumber, displayName);
         }
       } catch (e: unknown) {
-        console.error("[whatsapp-connect] Phone numbers fetch error (non-critical):", e instanceof Error ? e.message : e);
+        console.error("[whatsapp-connect] Phone numbers fetch error:", e instanceof Error ? e.message : e);
       }
     }
 
-    // If we have the phone_number_id, get its details
+    // Step 2c: If we have phone number ID, get its details
     if (resolvedPhoneNumberId) {
-      console.log("[whatsapp-connect] Step 2b: Getting phone details for:", resolvedPhoneNumberId);
+      console.log("[whatsapp-connect] LOG phone-number-detected:", resolvedPhoneNumberId);
+      console.log("[whatsapp-connect] Step 2c: Getting phone details for:", resolvedPhoneNumberId);
       try {
         const phoneRes = await fetch(
           `${GRAPH_API}/${resolvedPhoneNumberId}?fields=verified_name,display_phone_number,quality_rating,code_verification_status&access_token=${accessToken}`
         );
         const phoneData = await phoneRes.json();
         console.log("[whatsapp-connect] Phone details:", JSON.stringify(phoneData)?.substring(0, 300));
-        if (phoneData) {
+        if (phoneData && !phoneData.error) {
           phoneNumber = phoneData.display_phone_number || phoneNumber;
           displayName = phoneData.verified_name || displayName;
         }
@@ -467,44 +519,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // If we don't have the WABA ID yet, try to find it from the token's debug info
+    // Step 2d: Last resort — if we STILL don't have WABA, try /me/businesses or shared WABAs
     if (!resolvedWabaId) {
-      console.log("[whatsapp-connect] Step 2c: No WABA ID, trying debug_token...");
+      console.log("[whatsapp-connect] Step 2d: Trying alternative WABA discovery via /me/businesses...");
       try {
-        const debugRes = await fetch(
-          `${GRAPH_API}/debug_token?input_token=${accessToken}&access_token=${META_APP_ID}|${META_APP_SECRET}`
+        const bizRes = await fetch(
+          `${GRAPH_API}/me/businesses?access_token=${accessToken}`
         );
-        const debugData = await debugRes.json();
-        console.log("[whatsapp-connect] debug_token response:", JSON.stringify(debugData)?.substring(0, 500));
-        const granularScopes: GranularScope[] = Array.isArray(debugData?.data?.granular_scopes)
-          ? debugData.data.granular_scopes
-          : [];
-        const waScope = granularScopes.find((s) =>
-          s.permission === "whatsapp_business_management"
-        );
-        if (waScope?.target_ids?.[0]) {
-          resolvedWabaId = waScope.target_ids[0];
-          console.log("[whatsapp-connect] ✅ Found WABA ID from debug_token:", resolvedWabaId);
-        }
+        const bizData = await bizRes.json();
+        console.log("[whatsapp-connect] /me/businesses response:", JSON.stringify(bizData)?.substring(0, 500));
 
-        // Also try to find phone number ID from scopes if still missing
-        if (!resolvedPhoneNumberId) {
-          const msgScope = granularScopes.find((s) =>
-            s.permission === "whatsapp_business_messaging"
+        if (bizData?.data?.[0]?.id) {
+          const businessId = bizData.data[0].id;
+          console.log("[whatsapp-connect] Found business ID:", businessId);
+
+          // Try to get WABA from this business
+          const wabaRes = await fetch(
+            `${GRAPH_API}/${businessId}/owned_whatsapp_business_accounts?access_token=${accessToken}`
           );
-          if (msgScope?.target_ids?.[0]) {
-            resolvedPhoneNumberId = msgScope.target_ids[0];
-            console.log("[whatsapp-connect] ✅ Found phone number ID from debug_token:", resolvedPhoneNumberId);
+          const wabaData = await wabaRes.json();
+          console.log("[whatsapp-connect] owned_whatsapp_business_accounts:", JSON.stringify(wabaData)?.substring(0, 500));
+
+          if (wabaData?.data?.[0]?.id) {
+            resolvedWabaId = wabaData.data[0].id;
+            console.log("[whatsapp-connect] ✅ Found WABA from business:", resolvedWabaId);
           }
         }
       } catch (e: unknown) {
-        console.error("[whatsapp-connect] debug_token error (non-critical):", e instanceof Error ? e.message : e);
+        console.error("[whatsapp-connect] Alternative WABA discovery error:", e instanceof Error ? e.message : e);
       }
     }
 
-    // Last resort: if we have WABA but still no phone number, try fetching
+    // Step 2e: If we now have WABA but still no phone, try one more time
     if (resolvedWabaId && !resolvedPhoneNumberId) {
-      console.log("[whatsapp-connect] Step 2d: Last resort phone number fetch from WABA:", resolvedWabaId);
+      console.log("[whatsapp-connect] Step 2e: Last resort phone number fetch from WABA:", resolvedWabaId);
       try {
         const phonesRes = await fetch(
           `${GRAPH_API}/${resolvedWabaId}/phone_numbers?access_token=${accessToken}`
@@ -563,12 +611,31 @@ Deno.serve(async (req) => {
 
     // ── Step 5: Save connection ──────────────────────────
     if (!resolvedPhoneNumberId) {
-      console.error("[whatsapp-connect] ❌ No phone number ID resolved after all attempts");
+      console.error("[whatsapp-connect] ❌ No phone number ID resolved after all attempts.", {
+        resolvedWabaId: resolvedWabaId || null,
+        hadWabaFromUrl: Boolean(wabaId),
+        hadPhoneFromUrl: Boolean(phoneNumberId),
+      });
+
+      try {
+        await supabase.from("whatsapp_logs").insert({
+          event_type: "embedded_signup_no_phone",
+          user_id: userId,
+          payload: {
+            resolvedWabaId,
+            hadWabaFromUrl: Boolean(wabaId),
+            hadPhoneFromUrl: Boolean(phoneNumberId),
+          },
+          error_message: "No phone number ID resolved",
+        });
+      } catch (_) { /* ignore */ }
+
       return respondError("Não foi possível identificar o Phone Number ID. Tente conectar novamente.", {
         resolvedWabaId: resolvedWabaId || null,
       });
     }
 
+    console.log("[whatsapp-connect] LOG connection-save-start");
     console.log("[whatsapp-connect] Step 5: Saving connection...", {
       userId,
       phoneNumberId: resolvedPhoneNumberId,
@@ -599,11 +666,12 @@ Deno.serve(async (req) => {
       .single();
 
     if (saveError) {
-      console.error("[whatsapp-connect] ❌ Save connection error:", saveError.message);
+      console.error("[whatsapp-connect] LOG connection-save-error:", saveError.message, saveError.details, saveError.hint);
       return respondError("Erro ao salvar conexão: " + saveError.message);
     }
 
-    console.log("[whatsapp-connect] ✅ Connection saved successfully:", savedConn?.id);
+    console.log("[whatsapp-connect] LOG connection-save-success");
+    console.log("[whatsapp-connect] ✅ Connection saved successfully:", savedConn?.id, "| status:", savedConn?.status);
 
     // Log success
     try {
@@ -611,6 +679,7 @@ Deno.serve(async (req) => {
         event_type: "embedded_signup_success",
         user_id: userId,
         payload: {
+          connection_id: savedConn?.id,
           waba_id: resolvedWabaId,
           phone_number_id: resolvedPhoneNumberId,
           phone_number: phoneNumber,

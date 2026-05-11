@@ -1,7 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useWhatsAppMessages, WhatsAppMessage } from "@/hooks/useWhatsAppMessages";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { useClients } from "@/hooks/useClients";
+import { useQueryClient } from "@tanstack/react-query";
 import { WhatsAppChatDrawer } from "@/components/whatsapp/WhatsAppChatDrawer";
 import { WhatsAppConnectionCard } from "@/components/whatsapp/WhatsAppConnectionCard";
 import { WhatsAppTemplatesCard } from "@/components/whatsapp/WhatsAppTemplatesCard";
@@ -9,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import {
   MessageCircle, Search, Loader2, Send, FileText, Phone,
   Users, Settings, CheckCheck, Check, Clock, AlertCircle,
@@ -34,11 +37,59 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function WhatsApp() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const callbackHandled = useRef(false);
+
   const { messages, isLoading: loadingMsgs } = useWhatsAppMessages();
   const { isConnected } = useWhatsAppConnection();
   const { clients, isLoading: loadingClients } = useClients();
   const [search, setSearch] = useState("");
   const [chatClient, setChatClient] = useState<{ id: string; name: string; phone: string } | null>(null);
+
+  // ── Handle OAuth callback return ──────────────────────
+  useEffect(() => {
+    if (callbackHandled.current) return;
+
+    const connected = searchParams.get("whatsapp_connected");
+    const error = searchParams.get("whatsapp_error");
+
+    // Also support legacy param format
+    const legacyWhatsapp = searchParams.get("whatsapp");
+
+    if (connected === "true" || legacyWhatsapp === "connected") {
+      callbackHandled.current = true;
+      console.log("✅ [WhatsApp] Callback detected: connection successful!");
+      toast.success("WhatsApp Business conectado com sucesso! 🎉", {
+        description: "Sua conta foi vinculada. Atualizando dados...",
+        duration: 5000,
+      });
+      // Force refetch connection data
+      queryClient.invalidateQueries({ queryKey: ["whatsapp_connection"] });
+      // Clean up URL params
+      const cleanParams = new URLSearchParams(searchParams);
+      cleanParams.delete("whatsapp_connected");
+      cleanParams.delete("whatsapp_error");
+      cleanParams.delete("whatsapp");
+      cleanParams.delete("message");
+      setSearchParams(cleanParams, { replace: true });
+    } else if (connected === "false" || error || legacyWhatsapp === "error") {
+      callbackHandled.current = true;
+      const errorMsg = error || searchParams.get("message") || "Erro desconhecido";
+      console.error("❌ [WhatsApp] Callback detected: connection failed:", errorMsg);
+      toast.error("Falha ao conectar WhatsApp", {
+        description: errorMsg,
+        duration: 8000,
+      });
+      // Clean up URL params
+      const cleanParams = new URLSearchParams(searchParams);
+      cleanParams.delete("whatsapp_connected");
+      cleanParams.delete("whatsapp_error");
+      cleanParams.delete("whatsapp");
+      cleanParams.delete("message");
+      setSearchParams(cleanParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, queryClient]);
 
   // Group messages by client (most recent first)
   const conversations = useMemo(() => {
