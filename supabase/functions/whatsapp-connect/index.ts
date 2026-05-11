@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
 
     if (!META_APP_ID || !META_APP_SECRET || !META_CONFIG_ID) {
       console.error("[whatsapp-connect] ❌ Missing required Meta backend config:", metaConfigStatus());
-      return jsonError(
+      return respondError(
         "META_APP_ID, META_APP_SECRET e VITE_META_CONFIG_ID precisam estar configurados no servidor.",
         metaConfigStatus()
       );
@@ -406,7 +406,7 @@ Deno.serve(async (req) => {
       try {
         await supabase.from("whatsapp_logs").insert({
           event_type: "embedded_signup_token_error",
-          user_id: user.id,
+          user_id: userId,
           payload: { lastError, strategiesAttempted: strategies.map(s => s.name) },
           error_message: lastError,
         });
@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
         console.error("[whatsapp-connect] Failed to log error to DB:", logErr);
       }
 
-      return jsonError(`Token exchange falhou: ${lastError}`, {
+      return respondError(`Token exchange falhou: ${lastError}`, {
         strategiesAttempted: strategies.map(s => s.name),
       });
     }
@@ -563,13 +563,13 @@ Deno.serve(async (req) => {
     // ── Step 5: Save connection ──────────────────────────
     if (!resolvedPhoneNumberId) {
       console.error("[whatsapp-connect] ❌ No phone number ID resolved after all attempts");
-      return jsonError("Não foi possível identificar o Phone Number ID. Tente conectar novamente.", {
+      return respondError("Não foi possível identificar o Phone Number ID. Tente conectar novamente.", {
         resolvedWabaId: resolvedWabaId || null,
       });
     }
 
     console.log("[whatsapp-connect] Step 5: Saving connection...", {
-      userId: user.id,
+      userId,
       phoneNumberId: resolvedPhoneNumberId,
       wabaId: resolvedWabaId,
       phoneNumber,
@@ -579,7 +579,7 @@ Deno.serve(async (req) => {
     const { data: savedConn, error: saveError } = await supabase
       .from("whatsapp_connections")
       .upsert({
-        user_id: user.id,
+        user_id: userId,
         provider: "meta_whatsapp",
         phone_number_id: resolvedPhoneNumberId,
         business_account_id: resolvedWabaId || null,
@@ -599,7 +599,7 @@ Deno.serve(async (req) => {
 
     if (saveError) {
       console.error("[whatsapp-connect] ❌ Save connection error:", saveError.message);
-      return jsonError("Erro ao salvar conexão: " + saveError.message);
+      return respondError("Erro ao salvar conexão: " + saveError.message);
     }
 
     console.log("[whatsapp-connect] ✅ Connection saved successfully:", savedConn?.id);
@@ -608,7 +608,7 @@ Deno.serve(async (req) => {
     try {
       await supabase.from("whatsapp_logs").insert({
         event_type: "embedded_signup_success",
-        user_id: user.id,
+        user_id: userId,
         payload: {
           waba_id: resolvedWabaId,
           phone_number_id: resolvedPhoneNumberId,
@@ -620,7 +620,7 @@ Deno.serve(async (req) => {
       console.error("[whatsapp-connect] Failed to log success:", logErr);
     }
 
-    return jsonSuccess({ connection: savedConn });
+    return respondSuccess({ connection: savedConn });
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
     const errStack = error instanceof Error ? error.stack : undefined;
