@@ -24,11 +24,7 @@ function getMetaConfig() {
   const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
   const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
   const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const defaultRedirect = supabaseUrl
-    ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/whatsapp-connect`
-    : "";
-  const metaRedirectUri = Deno.env.get("META_REDIRECT_URI") || defaultRedirect;
+  const metaRedirectUri = Deno.env.get("META_REDIRECT_URI") || Deno.env.get("VITE_META_REDIRECT_URI") || "";
 
   return { metaAppId, metaConfigId, metaAppSecret, metaRedirectUri };
 }
@@ -178,31 +174,32 @@ Deno.serve(async (req) => {
 
     // ── Step 1: Exchange code for Business Access Token ──
     // The redirect_uri MUST be identical to the one used in the FB.login call.
-    const effectiveRedirectUri = redirectUri || META_REDIRECT_URI;
+    if (!redirectUri) {
+      console.error("[whatsapp-connect] ❌ Missing redirectUri from frontend. Refusing token exchange to avoid OAuth mismatch.");
+      return jsonError("redirectUri ausente. O frontend precisa enviar window.location.origin + '/'.");
+    }
+
+    const effectiveRedirectUri = redirectUri;
     console.log("[whatsapp-connect] Step 1: Exchanging code for token...", {
       codeLength: code.length,
       codePrefix: code.substring(0, 10) + "...",
       wabaId: wabaId || "(not provided)",
       phoneNumberId: phoneNumberId || "(not provided)",
-      redirectUri_fromClient: redirectUri || "(none)",
+      redirectUri_fromClient: redirectUri,
       META_REDIRECT_URI_env: META_REDIRECT_URI || "(none)",
-      effectiveRedirectUri,
+      redirectUri_sentToMeta: effectiveRedirectUri,
       META_APP_ID_used: META_APP_ID.substring(0, 6) + "...",
       META_APP_SECRET_present: Boolean(META_APP_SECRET),
     });
 
     const baseUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
 
-    // Primary strategy: use the fixed redirect_uri (matches frontend FB.login).
-    // Fallbacks kept for resilience.
-    const strategies: { name: string; url: string }[] = [];
-    if (effectiveRedirectUri) {
-      strategies.push({
+    const strategies: { name: string; url: string }[] = [
+      {
         name: `redirect_uri=${effectiveRedirectUri}`,
         url: `${baseUrl}&redirect_uri=${encodeURIComponent(effectiveRedirectUri)}`,
-      });
-    }
-    strategies.push({ name: "no redirect_uri", url: baseUrl });
+      },
+    ];
 
     let tokenData: Record<string, unknown> | null = null;
     let lastError = "";
@@ -218,7 +215,11 @@ Deno.serve(async (req) => {
         break;
       } else {
         const errMsg = data?.error?.message || "Unknown error";
-        console.warn(`[whatsapp-connect] ⚠ Strategy "${strategy.name}" failed:`, errMsg);
+        console.warn(`[whatsapp-connect] ⚠ Strategy "${strategy.name}" failed:`, {
+          message: errMsg,
+          fullMetaError: data?.error || data,
+          redirectUriSentToMeta: effectiveRedirectUri,
+        });
         lastError = errMsg;
       }
     }
