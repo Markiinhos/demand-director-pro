@@ -55,6 +55,70 @@ function metaConfigStatus() {
   };
 }
 
+function getOAuthRedirectUri(metaRedirectUri: string) {
+  return metaRedirectUri || OAUTH_CALLBACK_URL;
+}
+
+function base64UrlEncode(value: Uint8Array | string) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecode(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function signStatePayload(payload: string, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
+function safeReturnTo(returnTo?: string) {
+  try {
+    const parsed = new URL(returnTo || DEFAULT_RETURN_TO);
+    if (parsed.protocol === "https:" && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
+      return parsed.toString();
+    }
+  } catch (_) { /* use default */ }
+  return DEFAULT_RETURN_TO;
+}
+
+async function createOAuthState(userId: string, returnTo: string, secret: string) {
+  const payload: OAuthStatePayload = {
+    userId,
+    returnTo: safeReturnTo(returnTo),
+    nonce: crypto.randomUUID(),
+    exp: Math.floor(Date.now() / 1000) + 15 * 60,
+  };
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = await signStatePayload(encodedPayload, secret);
+  return `${encodedPayload}.${signature}`;
+}
+
+async function verifyOAuthState(state: string | null, secret: string): Promise<OAuthStatePayload | null> {
+  if (!state || !state.includes(".")) return null;
+  const [encodedPayload, signature] = state.split(".");
+  const expectedSignature = await signStatePayload(encodedPayload, secret);
+  if (signature !== expectedSignature) return null;
+  const payloadText = new TextDecoder().decode(base64UrlDecode(encodedPayload));
+  const payload = JSON.parse(payloadText) as OAuthStatePayload;
+  if (!payload.userId || !payload.returnTo || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
+    return null;
+  }
+  return payload;
+}
+
 /**
  * Always returns HTTP 200 so supabase.functions.invoke passes data to the client.
  * Logical errors are indicated by { success: false, error: "..." } in the body.
