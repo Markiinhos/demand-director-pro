@@ -9,6 +9,7 @@ export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 
 const FRONTEND_META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const FRONTEND_META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
+const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
 
 /**
  * Helper to invoke an edge function and handle responses uniformly.
@@ -186,7 +187,7 @@ export function useWhatsAppConnection() {
         codeLength: input.code?.length,
         wabaId: input.wabaId,
         phoneNumberId: input.phoneNumberId,
-        redirectUri: input.redirectUri,
+        redirectUri: REDIRECT_URI,
       });
 
       // invokeEdgeFunction handles both HTTP and logical errors
@@ -194,7 +195,7 @@ export function useWhatsAppConnection() {
         code: input.code,
         wabaId: input.wabaId || null,
         phoneNumberId: input.phoneNumberId || null,
-        redirectUri: input.redirectUri || null,
+        redirectUri: REDIRECT_URI,
       });
 
       console.log("✅ [WhatsApp] Resposta do backend:", result);
