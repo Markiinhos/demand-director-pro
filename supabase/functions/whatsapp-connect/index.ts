@@ -7,12 +7,10 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
-const OAUTH_CALLBACK_URL = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
-const DEFAULT_RETURN_TO = "https://demand-director-pro.lovable.app/whatsapp";
+const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
+const DEFAULT_RETURN_TO = REDIRECT_URI;
 const ALLOWED_RETURN_HOSTS = new Set([
   "demand-director-pro.lovable.app",
-  "id-preview--c898cc54-01d4-433a-abb1-d2b9cf213f67.lovable.app",
-  "localhost",
 ]);
 
 type ConnectRequestBody = {
@@ -40,8 +38,7 @@ function getMetaConfig() {
   const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
   const metaConfigId = Deno.env.get("VITE_META_CONFIG_ID") || Deno.env.get("META_CONFIG_ID") || "";
   const metaAppSecret = Deno.env.get("META_APP_SECRET") || "";
-  const metaRedirectUri = Deno.env.get("META_REDIRECT_URI") || Deno.env.get("VITE_META_REDIRECT_URI") || "";
-  return { metaAppId, metaConfigId, metaAppSecret, metaRedirectUri };
+  return { metaAppId, metaConfigId, metaAppSecret };
 }
 
 function metaConfigStatus() {
@@ -76,7 +73,7 @@ async function signStatePayload(payload: string, secret: string) {
 function safeReturnTo(returnTo?: string) {
   try {
     const parsed = new URL(returnTo || DEFAULT_RETURN_TO);
-    if ((parsed.protocol === "https:" || (parsed.protocol === "http:" && parsed.hostname === "localhost")) && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
+    if (parsed.protocol === "https:" && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
       return parsed.toString();
     }
   } catch (_) { /* use default */ }
