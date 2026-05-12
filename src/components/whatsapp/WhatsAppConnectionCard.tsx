@@ -382,7 +382,6 @@ export function WhatsAppConnectionCard() {
                 code,
                 wabaId: capturedData.wabaId,
                 phoneNumberId: capturedData.phoneNumberId,
-                redirectUri: REDIRECT_URI,
               },
               {
                 onSuccess: (data) => {
