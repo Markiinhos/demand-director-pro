@@ -258,14 +258,31 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
 
-    const baseTokenUrl = `${GRAPH_API}/oauth/access_token?client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&code=${encodeURIComponent(code)}`;
-    const tokenExchangeUrl = `${baseTokenUrl}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    const tokenExchangeUrl = `${GRAPH_API}/oauth/access_token`;
+    const tokenExchangeBody = new URLSearchParams({
+      client_id: META_APP_ID,
+      client_secret: META_APP_SECRET,
+      code,
+      redirect_uri: REDIRECT_URI,
+    });
+    const maskedTokenExchangeBody = new URLSearchParams(tokenExchangeBody);
+    maskedTokenExchangeBody.set("client_secret", "***");
+    maskedTokenExchangeBody.set("code", "***");
 
-    console.log("[whatsapp-connect] Token exchange URL (masked):", tokenExchangeUrl.replace(/client_secret=[^&]+/, "client_secret=***").replace(/code=[^&]+/, "code=***"));
+    console.log("TOKEN EXCHANGE redirect_uri:", REDIRECT_URI);
+    console.log("[whatsapp-connect] TOKEN EXCHANGE final POST URL:", tokenExchangeUrl);
+    console.log("[whatsapp-connect] TOKEN EXCHANGE POST body (masked):", maskedTokenExchangeBody.toString());
 
-    const tokenRes = await fetch(tokenExchangeUrl);
+    const tokenRes = await fetch(tokenExchangeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: tokenExchangeBody.toString(),
+    });
     const tokenResData = await tokenRes.json();
-    console.log("[whatsapp-connect] resposta da Meta (token exchange):", JSON.stringify(tokenResData));
+    const safeTokenResData = tokenResData?.access_token
+      ? { ...tokenResData, access_token: `*** length=${String(tokenResData.access_token).length}` }
+      : tokenResData;
+    console.log("[whatsapp-connect] resposta completa da Meta (token exchange):", JSON.stringify(safeTokenResData));
 
     let tokenData: Record<string, unknown> | null = null;
     let lastTokenError = "";
