@@ -9,8 +9,6 @@ export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 
 const FRONTEND_META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const FRONTEND_META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
-
 /**
  * Helper to invoke an edge function and handle responses uniformly.
  * Since the Edge Function now always returns HTTP 200, we just
@@ -186,7 +184,6 @@ export function useWhatsAppConnection() {
         codeLength: input.code?.length,
         wabaId: input.wabaId,
         phoneNumberId: input.phoneNumberId,
-        redirectUri: REDIRECT_URI,
       });
 
       // invokeEdgeFunction handles both HTTP and logical errors
