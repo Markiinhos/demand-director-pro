@@ -9,7 +9,6 @@ export type WhatsAppTemplate = Tables<"whatsapp_templates">;
 
 const FRONTEND_META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const FRONTEND_META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-
 /**
  * Helper to invoke an edge function and handle responses uniformly.
  * Since the Edge Function now always returns HTTP 200, we just
@@ -180,13 +179,11 @@ export function useWhatsAppConnection() {
       code: string;
       wabaId?: string;
       phoneNumberId?: string;
-      redirectUri?: string;
     }) => {
       console.log("🚀 [WhatsApp] Embedded Signup — enviando code para backend...", {
         codeLength: input.code?.length,
         wabaId: input.wabaId,
         phoneNumberId: input.phoneNumberId,
-        redirectUri: input.redirectUri,
       });
 
       // invokeEdgeFunction handles both HTTP and logical errors
@@ -194,7 +191,6 @@ export function useWhatsAppConnection() {
         code: input.code,
         wabaId: input.wabaId || null,
         phoneNumberId: input.phoneNumberId || null,
-        redirectUri: input.redirectUri || null,
       });
 
       console.log("✅ [WhatsApp] Resposta do backend:", result);

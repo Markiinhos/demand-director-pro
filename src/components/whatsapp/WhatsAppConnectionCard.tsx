@@ -11,7 +11,7 @@ import { toast } from "sonner";
 // ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-const META_REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI || "";
+const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
 
 // ── Timeout for the Embedded Signup flow (ms) ────────────
 const EMBEDDED_SIGNUP_TIMEOUT_MS = 20_000;
@@ -303,15 +303,12 @@ export function WhatsAppConnectionCard() {
       return;
     }
 
-    // ── Resolve redirect_uri ──────────────────────────
-    const redirectUri = META_REDIRECT_URI;
-
     // ── Pre-launch diagnostic logs ────────────────────
     console.log("[WhatsApp] ════════════════════════════════════");
     console.log("[WhatsApp] fb-login-start 🚀 Launching Embedded Signup via FB.login()");
     console.log("[WhatsApp] app_id:", appId);
     console.log("[WhatsApp] config_id:", configId);
-    console.log("[WhatsApp] redirect_uri (frontend):", redirectUri || "(NÃO DEFINIDO)");
+    console.log("[WhatsApp] redirect_uri enviado no FB.login:", REDIRECT_URI);
     console.log("[WhatsApp] response_type:", "code");
     console.log("[WhatsApp] override_default_response_type:", true);
     console.log("[WhatsApp] FB object exists:", Boolean(window.FB));
@@ -377,7 +374,7 @@ export function WhatsAppConnectionCard() {
 
             // Send code + captured IDs + redirect_uri to backend
             console.log("[WhatsApp] connect-edge-function-called: Sending code to backend...", {
-              redirectUri,
+              redirectUri: REDIRECT_URI,
             });
 
             connectViaEmbeddedSignup.mutate(
@@ -385,7 +382,6 @@ export function WhatsAppConnectionCard() {
                 code,
                 wabaId: capturedData.wabaId,
                 phoneNumberId: capturedData.phoneNumberId,
-                redirectUri,
               },
               {
                 onSuccess: (data) => {
@@ -421,7 +417,7 @@ export function WhatsAppConnectionCard() {
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+          redirect_uri: REDIRECT_URI,
           extras: {
             setup: {},
             featureType: "",
