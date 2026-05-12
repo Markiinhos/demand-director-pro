@@ -18,7 +18,6 @@ type ConnectRequestBody = {
   code?: string;
   wabaId?: string;
   phoneNumberId?: string;
-  redirectUri?: string;
   returnTo?: string;
 };
 
@@ -255,7 +254,6 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] code recebido:", Boolean(code), "| codeLen:", code.length);
 
     console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
-    console.log("[whatsapp-connect] redirect_uri recebido do frontend (ignorado por regra fixa):", requestBody?.redirectUri || "(not provided)");
     console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", REDIRECT_URI);
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
