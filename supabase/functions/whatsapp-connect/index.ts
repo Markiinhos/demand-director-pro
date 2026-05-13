@@ -269,6 +269,7 @@ Deno.serve(async (req) => {
       redirect_uri: redirectUri,
     });
     const tokenExchangeDebug = {
+      oauth_dialog_redirect_uri: oauthDialogRedirectUri,
       token_exchange_redirect_uri: redirectUri,
       app_id: META_APP_ID,
       graph_endpoint: tokenExchangeUrl,
