@@ -309,6 +309,7 @@ export function WhatsAppConnectionCard() {
     console.log("[WhatsApp] app_id:", appId);
     console.log("[WhatsApp] config_id:", configId);
     console.log("[WhatsApp] redirect_uri enviado no FB.login:", REDIRECT_URI);
+    console.log("Frontend redirect_uri:", REDIRECT_URI);
     console.log("[WhatsApp] response_type:", "code");
     console.log("[WhatsApp] override_default_response_type:", true);
     console.log("[WhatsApp] FB object exists:", Boolean(window.FB));

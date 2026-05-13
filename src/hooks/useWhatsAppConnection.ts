@@ -36,7 +36,12 @@ async function invokeEdgeFunction<T = Record<string, unknown>>(
 
   // Logical error from the function (success: false)
   if (data?.success === false || data?.error) {
-    const errMsg = data.error || "Erro desconhecido do servidor";
+    const debugFields = [
+      data?.token_exchange_redirect_uri ? `token_exchange_redirect_uri=${data.token_exchange_redirect_uri}` : null,
+      data?.app_id ? `app_id=${data.app_id}` : null,
+      data?.graph_endpoint ? `graph_endpoint=${data.graph_endpoint}` : null,
+    ].filter(Boolean).join(" | ");
+    const errMsg = `${data.error || "Erro desconhecido do servidor"}${debugFields ? ` | ${debugFields}` : ""}`;
     console.error(`❌ [${functionName}] Logical error:`, data);
     throw new Error(errMsg);
   }
