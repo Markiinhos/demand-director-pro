@@ -258,20 +258,28 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
 
+    const redirectUri = REDIRECT_URI;
     const tokenExchangeUrl = `${GRAPH_API}/oauth/access_token`;
     const tokenExchangeBody = new URLSearchParams({
       client_id: META_APP_ID,
       client_secret: META_APP_SECRET,
       code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
     });
+    const tokenExchangeDebug = {
+      token_exchange_redirect_uri: redirectUri,
+      app_id: META_APP_ID,
+      graph_endpoint: tokenExchangeUrl,
+    };
     const maskedTokenExchangeBody = new URLSearchParams(tokenExchangeBody);
     maskedTokenExchangeBody.set("client_secret", "***");
     maskedTokenExchangeBody.set("code", "***");
 
-    console.log("TOKEN EXCHANGE redirect_uri:", REDIRECT_URI);
+    console.log("TOKEN_EXCHANGE_REDIRECT_URI_FINAL", redirectUri);
+    console.log("Backend token exchange redirect_uri:", redirectUri);
     console.log("[whatsapp-connect] TOKEN EXCHANGE final POST URL:", tokenExchangeUrl);
     console.log("[whatsapp-connect] TOKEN EXCHANGE POST body (masked):", maskedTokenExchangeBody.toString());
+    console.log("[whatsapp-connect] TOKEN EXCHANGE debug sanitized:", JSON.stringify(tokenExchangeDebug));
 
     const tokenRes = await fetch(tokenExchangeUrl, {
       method: "POST",
@@ -299,9 +307,9 @@ Deno.serve(async (req) => {
     if (!tokenData?.access_token) {
       console.error("[whatsapp-connect] ❌ ALL token exchange attempts FAILED:", lastTokenError);
       try {
-        await supabase.from("whatsapp_logs").insert({ event_type: "token_error", user_id: userId, error_message: lastTokenError, payload: { redirectUri: REDIRECT_URI, metaResponse: tokenResData } });
+        await supabase.from("whatsapp_logs").insert({ event_type: "token_error", user_id: userId, error_message: lastTokenError, payload: { ...tokenExchangeDebug, metaResponse: tokenResData } });
       } catch (_) { /* ignore */ }
-      return respondError(`Token exchange falhou: ${lastTokenError}`);
+      return respondError(`Token exchange falhou: ${lastTokenError}`, tokenExchangeDebug);
     }
 
     console.log("[whatsapp-connect] LOG code-exchange-success");
