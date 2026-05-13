@@ -11,7 +11,7 @@ import { toast } from "sonner";
 // ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
+const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
 
 // ── Timeout for the Embedded Signup flow (ms) ────────────
 const EMBEDDED_SIGNUP_TIMEOUT_MS = 20_000;
@@ -308,6 +308,7 @@ export function WhatsAppConnectionCard() {
     console.log("[WhatsApp] fb-login-start 🚀 Launching Embedded Signup via FB.login()");
     console.log("[WhatsApp] app_id:", appId);
     console.log("[WhatsApp] config_id:", configId);
+    console.log("oauth_dialog_redirect_uri", REDIRECT_URI);
     console.log("[WhatsApp] redirect_uri enviado no FB.login:", REDIRECT_URI);
     console.log("Frontend redirect_uri:", REDIRECT_URI);
     console.log("[WhatsApp] response_type:", "code");

@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
-const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp";
+const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
 const DEFAULT_RETURN_TO = REDIRECT_URI;
 const ALLOWED_RETURN_HOSTS = new Set([
   "demand-director-pro.lovable.app",
@@ -254,6 +254,8 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] code recebido:", Boolean(code), "| codeLen:", code.length);
 
     console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
+    console.log("oauth_dialog_redirect_uri", oauthDialogRedirectUri);
+    console.log("token_exchange_redirect_uri", REDIRECT_URI);
     console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", REDIRECT_URI);
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
@@ -267,6 +269,7 @@ Deno.serve(async (req) => {
       redirect_uri: redirectUri,
     });
     const tokenExchangeDebug = {
+      oauth_dialog_redirect_uri: oauthDialogRedirectUri,
       token_exchange_redirect_uri: redirectUri,
       app_id: META_APP_ID,
       graph_endpoint: tokenExchangeUrl,
