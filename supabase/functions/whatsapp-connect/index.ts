@@ -276,6 +276,7 @@ Deno.serve(async (req) => {
     maskedTokenExchangeBody.set("code", "***");
 
     console.log("TOKEN_EXCHANGE_REDIRECT_URI_FINAL", redirectUri);
+    console.log("Backend token exchange redirect_uri:", redirectUri);
     console.log("[whatsapp-connect] TOKEN EXCHANGE final POST URL:", tokenExchangeUrl);
     console.log("[whatsapp-connect] TOKEN EXCHANGE POST body (masked):", maskedTokenExchangeBody.toString());
     console.log("[whatsapp-connect] TOKEN EXCHANGE debug sanitized:", JSON.stringify(tokenExchangeDebug));
