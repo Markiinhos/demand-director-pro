@@ -148,9 +148,11 @@ Deno.serve(async (req) => {
     };
 
     const respondError = (error: string, details?: Record<string, unknown>) => {
+      if (isFromOAuthCallback) return redirectToApp("error", error);
       return jsonError(error, details);
     };
     const respondSuccess = (data: unknown) => {
+      if (isFromOAuthCallback) return redirectToApp("connected");
       return jsonSuccess(data);
     };
 
