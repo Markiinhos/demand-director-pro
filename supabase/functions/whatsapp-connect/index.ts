@@ -8,10 +8,6 @@ const corsHeaders = {
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
 const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
-const DEFAULT_RETURN_TO = REDIRECT_URI;
-const ALLOWED_RETURN_HOSTS = new Set([
-  "demand-director-pro.lovable.app",
-]);
 
 type ConnectRequestBody = {
   action?: string;
@@ -19,12 +15,10 @@ type ConnectRequestBody = {
   wabaId?: string;
   phoneNumberId?: string;
   redirectUri?: string;
-  returnTo?: string;
 };
 
 type OAuthStatePayload = {
   userId: string;
-  returnTo: string;
   nonce: string;
   exp: number;
 };
@@ -70,18 +64,8 @@ async function signStatePayload(payload: string, secret: string) {
   return base64UrlEncode(new Uint8Array(signature));
 }
 
-function safeReturnTo(returnTo?: string) {
-  try {
-    const parsed = new URL(returnTo || DEFAULT_RETURN_TO);
-    if (parsed.protocol === "https:" && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
-      return parsed.toString();
-    }
-  } catch (_) { /* use default */ }
-  return DEFAULT_RETURN_TO;
-}
-
-async function createOAuthState(userId: string, returnTo: string, secret: string) {
-  const payload: OAuthStatePayload = { userId, returnTo: safeReturnTo(returnTo), nonce: crypto.randomUUID(), exp: Math.floor(Date.now() / 1000) + 15 * 60 };
+async function createOAuthState(userId: string, secret: string) {
+  const payload: OAuthStatePayload = { userId, nonce: crypto.randomUUID(), exp: Math.floor(Date.now() / 1000) + 15 * 60 };
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
   const signature = await signStatePayload(encodedPayload, secret);
   return `${encodedPayload}.${signature}`;
@@ -94,7 +78,7 @@ async function verifyOAuthState(state: string | null, secret: string): Promise<O
   if (signature !== expectedSignature) return null;
   const payloadText = new TextDecoder().decode(base64UrlDecode(encodedPayload));
   const payload = JSON.parse(payloadText) as OAuthStatePayload;
-  if (!payload.userId || !payload.returnTo || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+  if (!payload.userId || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
   return payload;
 }
 
