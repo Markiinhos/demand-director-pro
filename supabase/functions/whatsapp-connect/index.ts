@@ -18,6 +18,7 @@ type ConnectRequestBody = {
   code?: string;
   wabaId?: string;
   phoneNumberId?: string;
+  redirectUri?: string;
   returnTo?: string;
 };
 
@@ -126,11 +127,17 @@ Deno.serve(async (req) => {
     if (req.method !== "GET") {
       try {
         const rawBody = await req.text();
-        rawBodyPreview = rawBody?.substring(0, 300) || "(empty)";
-        console.log("[whatsapp-connect] Raw body:", rawBodyPreview);
         if (rawBody) {
           requestBody = JSON.parse(rawBody);
+          rawBodyPreview = JSON.stringify({
+            ...requestBody,
+            code: requestBody?.code ? `*** length=${requestBody.code.length}` : undefined,
+          }).substring(0, 300);
+          console.log("[whatsapp-connect] Raw body (masked):", rawBodyPreview);
           console.log("[whatsapp-connect] Parsed → action:", requestBody?.action, "| code:", Boolean(requestBody?.code), "| wabaId:", requestBody?.wabaId || "none", "| phoneNumberId:", requestBody?.phoneNumberId || "none");
+        } else {
+          rawBodyPreview = "(empty)";
+          console.log("[whatsapp-connect] Raw body:", rawBodyPreview);
         }
       } catch (e: unknown) {
         console.error("[whatsapp-connect] ❌ Body parse FAILED:", e instanceof Error ? e.message : String(e));
@@ -256,6 +263,7 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
     console.log("oauth_dialog_redirect_uri", oauthDialogRedirectUri);
     console.log("token_exchange_redirect_uri", REDIRECT_URI);
+    console.log("client_sent_redirect_uri", requestBody?.redirectUri || "(none)");
     console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", REDIRECT_URI);
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
