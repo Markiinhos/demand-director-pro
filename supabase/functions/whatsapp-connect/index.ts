@@ -8,22 +8,17 @@ const corsHeaders = {
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
 const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
-const DEFAULT_RETURN_TO = REDIRECT_URI;
-const ALLOWED_RETURN_HOSTS = new Set([
-  "demand-director-pro.lovable.app",
-]);
 
 type ConnectRequestBody = {
   action?: string;
   code?: string;
   wabaId?: string;
   phoneNumberId?: string;
-  returnTo?: string;
+  redirectUri?: string;
 };
 
 type OAuthStatePayload = {
   userId: string;
-  returnTo: string;
   nonce: string;
   exp: number;
 };
@@ -69,18 +64,8 @@ async function signStatePayload(payload: string, secret: string) {
   return base64UrlEncode(new Uint8Array(signature));
 }
 
-function safeReturnTo(returnTo?: string) {
-  try {
-    const parsed = new URL(returnTo || DEFAULT_RETURN_TO);
-    if (parsed.protocol === "https:" && ALLOWED_RETURN_HOSTS.has(parsed.hostname)) {
-      return parsed.toString();
-    }
-  } catch (_) { /* use default */ }
-  return DEFAULT_RETURN_TO;
-}
-
-async function createOAuthState(userId: string, returnTo: string, secret: string) {
-  const payload: OAuthStatePayload = { userId, returnTo: safeReturnTo(returnTo), nonce: crypto.randomUUID(), exp: Math.floor(Date.now() / 1000) + 15 * 60 };
+async function createOAuthState(userId: string, secret: string) {
+  const payload: OAuthStatePayload = { userId, nonce: crypto.randomUUID(), exp: Math.floor(Date.now() / 1000) + 15 * 60 };
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
   const signature = await signStatePayload(encodedPayload, secret);
   return `${encodedPayload}.${signature}`;
@@ -93,7 +78,7 @@ async function verifyOAuthState(state: string | null, secret: string): Promise<O
   if (signature !== expectedSignature) return null;
   const payloadText = new TextDecoder().decode(base64UrlDecode(encodedPayload));
   const payload = JSON.parse(payloadText) as OAuthStatePayload;
-  if (!payload.userId || !payload.returnTo || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+  if (!payload.userId || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
   return payload;
 }
 
@@ -126,11 +111,17 @@ Deno.serve(async (req) => {
     if (req.method !== "GET") {
       try {
         const rawBody = await req.text();
-        rawBodyPreview = rawBody?.substring(0, 300) || "(empty)";
-        console.log("[whatsapp-connect] Raw body:", rawBodyPreview);
         if (rawBody) {
           requestBody = JSON.parse(rawBody);
+          rawBodyPreview = JSON.stringify({
+            ...requestBody,
+            code: requestBody?.code ? `*** length=${requestBody.code.length}` : undefined,
+          }).substring(0, 300);
+          console.log("[whatsapp-connect] Raw body (masked):", rawBodyPreview);
           console.log("[whatsapp-connect] Parsed → action:", requestBody?.action, "| code:", Boolean(requestBody?.code), "| wabaId:", requestBody?.wabaId || "none", "| phoneNumberId:", requestBody?.phoneNumberId || "none");
+        } else {
+          rawBodyPreview = "(empty)";
+          console.log("[whatsapp-connect] Raw body:", rawBodyPreview);
         }
       } catch (e: unknown) {
         console.error("[whatsapp-connect] ❌ Body parse FAILED:", e instanceof Error ? e.message : String(e));
@@ -145,12 +136,11 @@ Deno.serve(async (req) => {
     const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
     const oauthDialogRedirectUri = REDIRECT_URI;
 
-    let callbackReturnTo: string | null = null;
     let userId = "";
     let isFromOAuthCallback = false;
 
     const redirectToApp = (status: "connected" | "error", message?: string) => {
-      const returnUrl = new URL(callbackReturnTo || DEFAULT_RETURN_TO);
+      const returnUrl = new URL(REDIRECT_URI);
       returnUrl.searchParams.set("whatsapp_connected", status === "connected" ? "true" : "false");
       if (status === "error") returnUrl.searchParams.set("whatsapp_error", message?.substring(0, 180) || "unknown");
       console.log("[whatsapp-connect] LOG redirect-back-url:", returnUrl.toString());
@@ -158,11 +148,11 @@ Deno.serve(async (req) => {
     };
 
     const respondError = (error: string, details?: Record<string, unknown>) => {
-      if (callbackReturnTo) return redirectToApp("error", error);
+      if (isFromOAuthCallback) return redirectToApp("error", error);
       return jsonError(error, details);
     };
     const respondSuccess = (data: unknown) => {
-      if (callbackReturnTo) return redirectToApp("connected");
+      if (isFromOAuthCallback) return redirectToApp("connected");
       return jsonSuccess(data);
     };
 
@@ -174,8 +164,6 @@ Deno.serve(async (req) => {
     // ── Meta OAuth error callback ────────────────────────
     if (req.method === "GET" && metaErrorParam) {
       console.error("[whatsapp-connect] ❌ Meta returned error:", Object.fromEntries(url.searchParams.entries()));
-      const sp = await verifyOAuthState(stateParam, META_APP_SECRET).catch(() => null);
-      callbackReturnTo = sp?.returnTo || DEFAULT_RETURN_TO;
       return redirectToApp("error", metaErrorParam);
     }
 
@@ -186,12 +174,10 @@ Deno.serve(async (req) => {
 
       const statePayload = await verifyOAuthState(stateParam, META_APP_SECRET).catch(() => null);
       if (!statePayload) {
-        callbackReturnTo = DEFAULT_RETURN_TO;
         return redirectToApp("error", "State OAuth inválido ou expirado.");
       }
 
       userId = statePayload.userId;
-      callbackReturnTo = statePayload.returnTo;
       requestBody = { code: codeParam, wabaId: url.searchParams.get("waba_id") || undefined, phoneNumberId: url.searchParams.get("phone_number_id") || undefined };
       console.log("[whatsapp-connect] ✅ OAuth callback userId:", userId);
     }
@@ -226,7 +212,7 @@ Deno.serve(async (req) => {
 
     // ── oauth-url (legacy, still supported) ──────────────
     if (requestBody?.action === "oauth-url" || actionParam === "oauth-url") {
-      const state = await createOAuthState(userId, requestBody?.returnTo || DEFAULT_RETURN_TO, META_APP_SECRET);
+      const state = await createOAuthState(userId, META_APP_SECRET);
       const oauthUrl = new URL(META_OAUTH_DIALOG);
       oauthUrl.searchParams.set("client_id", META_APP_ID);
       oauthUrl.searchParams.set("redirect_uri", oauthDialogRedirectUri);
@@ -256,6 +242,7 @@ Deno.serve(async (req) => {
     console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
     console.log("oauth_dialog_redirect_uri", oauthDialogRedirectUri);
     console.log("token_exchange_redirect_uri", REDIRECT_URI);
+    console.log("client_sent_redirect_uri", requestBody?.redirectUri || "(none)");
     console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", REDIRECT_URI);
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
