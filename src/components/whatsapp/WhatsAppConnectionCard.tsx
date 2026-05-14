@@ -384,6 +384,7 @@ export function WhatsAppConnectionCard() {
                 code,
                 wabaId: capturedData.wabaId,
                 phoneNumberId: capturedData.phoneNumberId,
+                redirectUri: REDIRECT_URI,
               },
               {
                 onSuccess: (data) => {
@@ -558,6 +559,13 @@ export function WhatsAppConnectionCard() {
                       • App ID: {activeMetaAppId?.substring(0, 6)}... • Config ID: {activeMetaConfigId?.substring(0, 6)}...
                     </span>
                   )}
+                </div>
+              )}
+
+              {isMetaReady && (
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-left text-[10px] text-muted-foreground">
+                  <div className="font-mono break-all">oauth_dialog_redirect_uri={REDIRECT_URI}</div>
+                  <div className="font-mono break-all">token_exchange_redirect_uri={REDIRECT_URI}</div>
                 </div>
               )}
 
