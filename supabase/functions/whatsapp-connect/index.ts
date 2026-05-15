@@ -204,12 +204,12 @@ Deno.serve(async (req) => {
 
     // ── public-config (auth required) ────────────────────
     if (requestBody?.action === "public-config" || actionParam === "public-config") {
-      if (!META_APP_ID || !META_CONFIG_ID) return jsonError("Configuração pública indisponível.");
+      if (!META_APP_ID) return jsonError("Configuração pública indisponível.");
       return jsonOk({ appId: META_APP_ID, configId: META_CONFIG_ID });
     }
 
-    if (!META_APP_ID || !META_APP_SECRET || !META_CONFIG_ID) {
-      return respondError("META_APP_ID, META_APP_SECRET e VITE_META_CONFIG_ID precisam estar configurados.", metaConfigStatus());
+    if (!META_APP_ID || !META_APP_SECRET) {
+      return respondError("META_APP_ID e META_APP_SECRET precisam estar configurados.", metaConfigStatus());
     }
 
     // ── oauth-url (legacy, still supported) ──────────────
@@ -218,9 +218,8 @@ Deno.serve(async (req) => {
       const oauthUrl = new URL(META_OAUTH_DIALOG);
       oauthUrl.searchParams.set("client_id", META_APP_ID);
       oauthUrl.searchParams.set("redirect_uri", oauthDialogRedirectUri);
-      oauthUrl.searchParams.set("config_id", META_CONFIG_ID);
+      oauthUrl.searchParams.set("scope", META_OAUTH_SCOPES);
       oauthUrl.searchParams.set("response_type", "code");
-      oauthUrl.searchParams.set("override_default_response_type", "true");
       oauthUrl.searchParams.set("state", state);
       return jsonOk({ oauthUrl: oauthUrl.toString(), redirectUri: oauthDialogRedirectUri });
     }
