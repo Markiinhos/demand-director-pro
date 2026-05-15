@@ -24,14 +24,12 @@ export function WhatsAppConnectionCard() {
   const [connectError, setConnectError] = useState<string | null>(null);
 
   const activeMetaAppId = metaConfig?.appId || META_APP_ID;
-  const activeMetaConfigId = metaConfig?.configId || META_CONFIG_ID;
   const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId);
 
   const handleManualOAuth = useCallback(() => {
     setConnectError(null);
 
     const appId = activeMetaAppId;
-    const configId = activeMetaConfigId;
 
     if (!appId) {
       const msg = "META_APP_ID não está configurado.";
@@ -41,19 +39,10 @@ export function WhatsAppConnectionCard() {
       return;
     }
 
-    if (configId && !/^\d+$/.test(configId)) {
-      const msg = `Configuration ID do Embedded Signup inválido. Valor recebido: "${configId.substring(0, 20)}..."`;
-      toast.error(msg);
-      console.error("[WhatsApp] oauth-manual-error: Invalid config_id format:", configId);
-      setConnectError(msg);
-      return;
-    }
-
-    // Intentionally no FB.login, no JS SDK, and no response_type=code via SDK.
+    // Intentionally no Meta JavaScript SDK for the authorization code.
 
     console.log("[WhatsApp] oauth-manual-start 🚀 Redirecting to Meta OAuth dialog");
     console.log("[WhatsApp] app_id:", appId);
-    console.log("[WhatsApp] config_id:", configId || "(unused in manual OAuth)");
     console.log("oauth_dialog_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("token_exchange_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("[WhatsApp] scope:", META_OAUTH_SCOPES);
@@ -70,7 +59,7 @@ export function WhatsAppConnectionCard() {
         setConnectError(err.message);
       },
     });
-  }, [activeMetaAppId, activeMetaConfigId, startManualOAuth]);
+  }, [activeMetaAppId, startManualOAuth]);
 
   const copyWebhookToken = () => {
     if (connection?.webhook_verify_token) {
@@ -182,7 +171,7 @@ export function WhatsAppConnectionCard() {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   <span>OAuth manual Meta pronto</span>
                   <span className="text-emerald-500 ml-1">
-                    • App ID: {activeMetaAppId?.substring(0, 6)}...{activeMetaConfigId ? ` • Config ID: ${activeMetaConfigId.substring(0, 6)}...` : ""}
+                    • App ID: {activeMetaAppId?.substring(0, 6)}...
                   </span>
                 </div>
               )}
