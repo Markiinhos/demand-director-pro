@@ -214,6 +214,23 @@ export function useWhatsAppConnection() {
     },
   });
 
+  const startManualOAuth = useMutation({
+    mutationFn: async () => {
+      const result = await invokeEdgeFunction<{ oauthUrl: string; redirectUri: string }>("whatsapp-connect", {
+        action: "oauth-url",
+      });
+      console.log("🚀 [WhatsApp] OAuth manual — URL gerada pelo backend:", {
+        redirectUri: result.redirectUri,
+        hasOauthUrl: Boolean(result.oauthUrl),
+      });
+      return result;
+    },
+    onError: (e) => {
+      console.error("❌ [WhatsApp] Erro ao iniciar OAuth manual:", e.message);
+      toast.error("Erro ao iniciar OAuth: " + e.message);
+    },
+  });
+
   // ── Manual connect — advanced/debug only ──────────────
   const connectManual = useMutation({
     mutationFn: async (input: {
@@ -357,6 +374,7 @@ export function useWhatsAppConnection() {
     isMetaConfigLoading: metaConfig.isLoading,
     refetchMetaConfig: metaConfig.refetch,
     connectViaEmbeddedSignup,
+    startManualOAuth,
     connectManual,
     disconnect,
     reconnect,
