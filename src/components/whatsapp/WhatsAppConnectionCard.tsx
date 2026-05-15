@@ -9,7 +9,6 @@ import {
 import { toast } from "sonner";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
-const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
 const OAUTH_CALLBACK_REDIRECT_URI = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
 const META_OAUTH_SCOPES = "business_management,whatsapp_business_management,whatsapp_business_messaging";
 
@@ -155,8 +154,8 @@ export function WhatsAppConnectionCard() {
                     <div className="space-y-2">
                       <p>Faltando: {metaConfig?.missing?.join(", ") || "diagnóstico indisponível"}.</p>
                       <ul className="list-disc list-inside space-y-1">
-                        <li>Frontend build: VITE_META_APP_ID {metaConfig?.hasFrontendAppId ? "ok" : "não encontrado"}; VITE_META_CONFIG_ID {metaConfig?.hasFrontendConfigId ? "ok" : "não encontrado"}.</li>
-                        <li>Backend Edge Function: META_APP_ID/VITE_META_APP_ID {metaConfig?.hasBackendAppId ? "ok" : "não encontrado"}; VITE_META_CONFIG_ID {metaConfig?.hasBackendConfigId ? "ok" : "não encontrado"}; META_APP_SECRET {metaConfig?.hasMetaAppSecret ? "ok" : "não encontrado"}.</li>
+                        <li>Frontend build: VITE_META_APP_ID {metaConfig?.hasFrontendAppId ? "ok" : "não encontrado"}.</li>
+                        <li>Backend Edge Function: META_APP_ID/VITE_META_APP_ID {metaConfig?.hasBackendAppId ? "ok" : "não encontrado"}; META_APP_SECRET {metaConfig?.hasMetaAppSecret ? "ok" : "não encontrado"}.</li>
                       </ul>
                     </div>
                   )}
