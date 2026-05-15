@@ -330,7 +330,6 @@ export function useWhatsAppConnection() {
     metaConfig: metaConfig.data ?? null,
     isMetaConfigLoading: metaConfig.isLoading,
     refetchMetaConfig: metaConfig.refetch,
-    connectViaEmbeddedSignup,
     startManualOAuth,
     connectManual,
     disconnect,
