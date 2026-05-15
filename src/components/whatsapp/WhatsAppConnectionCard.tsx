@@ -54,11 +54,11 @@ export function WhatsAppConnectionCard() {
     oauthUrl.searchParams.set("redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     oauthUrl.searchParams.set("scope", META_OAUTH_SCOPES);
     oauthUrl.searchParams.set("response_type", "code");
-    if (configId) oauthUrl.searchParams.set("config_id", configId);
+    // Intentionally no FB.login, no JS SDK, and no response_type=code via SDK.
 
     console.log("[WhatsApp] oauth-manual-start 🚀 Redirecting to Meta OAuth dialog");
     console.log("[WhatsApp] app_id:", appId);
-    console.log("[WhatsApp] config_id:", configId || "(none)");
+    console.log("[WhatsApp] config_id:", configId || "(unused in manual OAuth)");
     console.log("oauth_dialog_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("token_exchange_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("[WhatsApp] scope:", META_OAUTH_SCOPES);
@@ -153,11 +153,7 @@ export function WhatsAppConnectionCard() {
                       <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.96 7.96 0 01-4.11-1.14l-.29-.17-3.06.8.82-2.99-.19-.3A7.96 7.96 0 014 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z" />
                     </svg>
                   )}
-                  {isBusy
-                    ? "Conectando..."
-                    : !true
-                      ? "Carregando SDK..."
-                      : "Conectar WhatsApp Business"}
+                  {isBusy ? "Conectando..." : "Conectar WhatsApp Business"}
                 </Button>
               ) : (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs text-amber-700 text-left space-y-2">
@@ -189,8 +185,8 @@ export function WhatsAppConnectionCard() {
 
               {isMetaReady && (
                 <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-left text-[10px] text-muted-foreground">
-                  <div className="font-mono break-all">oauth_dialog_redirect_uri={OAUTH_CALLBACK_OAUTH_CALLBACK_REDIRECT_URI}</div>
-                  <div className="font-mono break-all">token_exchange_redirect_uri={OAUTH_CALLBACK_OAUTH_CALLBACK_REDIRECT_URI}</div>
+                  <div className="font-mono break-all">oauth_dialog_redirect_uri={OAUTH_CALLBACK_REDIRECT_URI}</div>
+                  <div className="font-mono break-all">token_exchange_redirect_uri={OAUTH_CALLBACK_REDIRECT_URI}</div>
                 </div>
               )}
 
