@@ -145,7 +145,6 @@ Deno.serve(async (req) => {
     const redirectToApp = (status: "connected" | "error", message?: string) => {
       const returnUrl = new URL(APP_RETURN_URI);
       if (status === "connected") returnUrl.searchParams.set("success", "1");
-      returnUrl.searchParams.set("whatsapp_connected", status === "connected" ? "true" : "false");
       if (status === "error") returnUrl.searchParams.set("whatsapp_error", message?.substring(0, 180) || "unknown");
       console.log("[whatsapp-connect] LOG redirect-back-url:", returnUrl.toString());
       return new Response(null, { status: 302, headers: { ...corsHeaders, Location: returnUrl.toString() } });
@@ -186,6 +185,10 @@ Deno.serve(async (req) => {
 
     // ── Auth ─────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
+
+    if (!userId && isFromOAuthCallback) {
+      return redirectToApp("error", "Sessão OAuth inválida ou expirada. Inicie a conexão novamente pelo app.");
+    }
 
     if (!userId && !authHeader?.startsWith("Bearer ")) {
       return jsonError("Unauthorized - token não fornecido", { _authMissing: true });
