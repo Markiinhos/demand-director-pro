@@ -17,7 +17,7 @@ export function WhatsAppConnectionCard() {
   const {
     connection, isLoading, isConnected, templates,
     metaConfig, isMetaConfigLoading,
-    disconnect, reconnect, testSend,
+    startManualOAuth, disconnect, reconnect, testSend,
   } = useWhatsAppConnection();
 
   const [isConnecting, setIsConnecting] = useState(false);
@@ -49,11 +49,6 @@ export function WhatsAppConnectionCard() {
       return;
     }
 
-    const oauthUrl = new URL("https://www.facebook.com/v22.0/dialog/oauth");
-    oauthUrl.searchParams.set("client_id", appId);
-    oauthUrl.searchParams.set("redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
-    oauthUrl.searchParams.set("scope", META_OAUTH_SCOPES);
-    oauthUrl.searchParams.set("response_type", "code");
     // Intentionally no FB.login, no JS SDK, and no response_type=code via SDK.
 
     console.log("[WhatsApp] oauth-manual-start 🚀 Redirecting to Meta OAuth dialog");
@@ -62,11 +57,20 @@ export function WhatsAppConnectionCard() {
     console.log("oauth_dialog_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("token_exchange_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
     console.log("[WhatsApp] scope:", META_OAUTH_SCOPES);
-    console.log("[WhatsApp] oauth_url:", oauthUrl.toString());
+    console.log("[WhatsApp] scope:", META_OAUTH_SCOPES);
 
     setIsConnecting(true);
-    window.location.href = oauthUrl.toString();
-  }, [activeMetaAppId, activeMetaConfigId]);
+    startManualOAuth.mutate(undefined, {
+      onSuccess: ({ oauthUrl }) => {
+        console.log("[WhatsApp] oauth_url:", oauthUrl);
+        window.location.href = oauthUrl;
+      },
+      onError: (err) => {
+        setIsConnecting(false);
+        setConnectError(err.message);
+      },
+    });
+  }, [activeMetaAppId, activeMetaConfigId, startManualOAuth]);
 
   const copyWebhookToken = () => {
     if (connection?.webhook_verify_token) {
@@ -83,7 +87,7 @@ export function WhatsAppConnectionCard() {
 
   const currentStatus = statusConfig[connection?.status as keyof typeof statusConfig] || statusConfig.disconnected;
   const StatusIcon = currentStatus.icon;
-  const isBusy = isConnecting;
+  const isBusy = isConnecting || startManualOAuth.isPending;
 
   return (
     <div className="space-y-4">
