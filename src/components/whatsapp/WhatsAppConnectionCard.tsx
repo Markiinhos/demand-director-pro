@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,90 +8,85 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// ── Meta App Config ──────────────────────────────────────
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || "";
-const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
+const OAUTH_CALLBACK_REDIRECT_URI = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
+const META_OAUTH_SCOPES = "business_management,whatsapp_business_management,whatsapp_business_messaging";
 
-// ── Timeout for the Embedded Signup flow (ms) ────────────
-const EMBEDDED_SIGNUP_TIMEOUT_MS = 20_000;
-
-// ── Facebook SDK types ───────────────────────────────────
-declare global {
-  interface Window {
-    FB?: {
-      init: (params: Record<string, unknown>) => void;
-      login: (
-        callback: (response: FBLoginResponse) => void,
-        options: Record<string, unknown>
-      ) => void;
-      getLoginStatus: (callback: (response: FBLoginResponse) => void) => void;
-    };
-    fbAsyncInit?: () => void;
-  }
-}
-
-type FBLoginResponse = {
-  status?: string;
-  authResponse?: {
-    code?: string;
-    accessToken?: string;
-    userID?: string;
-    expiresIn?: number;
-  } | null;
-};
-
-type EmbeddedSignupEvent = {
-  type: string;
-  event: string;
-  data?: {
-    phone_number_id?: string;
-    waba_id?: string;
-    current_step?: string;
-  };
-};
-
-// ═══════════════════════════════════════════════════════════
 export function WhatsAppConnectionCard() {
   const {
     connection, isLoading, isConnected, templates,
     metaConfig, isMetaConfigLoading,
-    connectViaEmbeddedSignup, disconnect, reconnect, testSend,
+    disconnect, reconnect, testSend,
   } = useWhatsAppConnection();
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [sdkScriptReady, setSdkScriptReady] = useState(false); // script loaded, window.FB exists
-  const [sdkInitialized, setSdkInitialized] = useState(false); // FB.init() called successfully
-  const sdkInitCalledRef = useRef(false); // prevent double FB.init()
-  const embeddedSignupDataRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const callbackFiredRef = useRef(false);
 
   const activeMetaAppId = metaConfig?.appId || META_APP_ID;
   const activeMetaConfigId = metaConfig?.configId || META_CONFIG_ID;
-  const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId && activeMetaConfigId);
+  const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId);
 
-  // sdkLoaded = both script ready AND init called
-  const sdkLoaded = sdkScriptReady && sdkInitialized;
+  const handleManualOAuth = useCallback(() => {
+    setConnectError(null);
 
-  // ── Helper: reset loading state ────────────────────────
-  const resetConnecting = useCallback((errorMsg?: string) => {
-    setIsConnecting(false);
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+    const appId = activeMetaAppId;
+    const configId = activeMetaConfigId;
+
+    if (!appId) {
+      const msg = "META_APP_ID não está configurado.";
+      toast.error(msg);
+      console.error("[WhatsApp] oauth-manual-error: Missing META_APP_ID");
+      setConnectError(msg);
+      return;
     }
-    if (errorMsg) {
-      setConnectError(errorMsg);
-      toast.error(errorMsg);
-      console.error(`[WhatsApp] ❌ ${errorMsg}`);
-    }
-  }, []);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
+    if (configId && !/^\d+$/.test(configId)) {
+      const msg = `Configuration ID do Embedded Signup inválido. Valor recebido: "${configId.substring(0, 20)}..."`;
+      toast.error(msg);
+      console.error("[WhatsApp] oauth-manual-error: Invalid config_id format:", configId);
+      setConnectError(msg);
+      return;
+    }
+
+    const oauthUrl = new URL("https://www.facebook.com/v22.0/dialog/oauth");
+    oauthUrl.searchParams.set("client_id", appId);
+    oauthUrl.searchParams.set("redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
+    oauthUrl.searchParams.set("scope", META_OAUTH_SCOPES);
+    oauthUrl.searchParams.set("response_type", "code");
+    if (configId) oauthUrl.searchParams.set("config_id", configId);
+
+    console.log("[WhatsApp] oauth-manual-start 🚀 Redirecting to Meta OAuth dialog");
+    console.log("[WhatsApp] app_id:", appId);
+    console.log("[WhatsApp] config_id:", configId || "(none)");
+    console.log("oauth_dialog_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
+    console.log("token_exchange_redirect_uri", OAUTH_CALLBACK_REDIRECT_URI);
+    console.log("[WhatsApp] scope:", META_OAUTH_SCOPES);
+    console.log("[WhatsApp] oauth_url:", oauthUrl.toString());
+
+    setIsConnecting(true);
+    window.location.href = oauthUrl.toString();
+  }, [activeMetaAppId, activeMetaConfigId]);
+
+  const copyWebhookToken = () => {
+    if (connection?.webhook_verify_token) {
+      navigator.clipboard.writeText(connection.webhook_verify_token);
+      toast.success("Verify Token copiado!");
+    }
+  };
+
+  // ── Status config ──────────────────────────────────────
+  const statusConfig = {
+    connected: { label: "Conectado", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20", icon: CheckCircle2 },
+    disconnected: { label: "Desconectado", color: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20", icon: AlertCircle },
+    error: { label: "Erro", color: "bg-red-500/10 text-red-600 border-red-500/20", icon: AlertCircle },
+  };
+
+  const currentStatus = statusConfig[connection?.status as keyof typeof statusConfig] || statusConfig.disconnected;
+  const StatusIcon = currentStatus.icon;
+  const isBusy = isConnecting;
+
+  return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
@@ -495,7 +490,7 @@ export function WhatsAppConnectionCard() {
               <div className="space-y-1.5">
                 <h3 className="text-base font-semibold">Conecte seu WhatsApp Business</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Ao clicar, o fluxo oficial da Meta será aberto para conectar ou criar sua conta WhatsApp Business. Tudo é feito em alguns cliques, sem sair da página.
+                  Ao clicar, o fluxo oficial da Meta será aberto para conectar ou criar sua conta WhatsApp Business. Tudo é feito em alguns cliques, pela página oficial da Meta.
                 </p>
               </div>
 
@@ -513,8 +508,8 @@ export function WhatsAppConnectionCard() {
               {isMetaReady ? (
                 <Button
                   size="lg"
-                  onClick={handleEmbeddedSignup}
-                  disabled={isBusy || !sdkLoaded}
+                  onClick={handleManualOAuth}
+                  disabled={isBusy}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 px-8 text-sm font-semibold shadow-md shadow-emerald-500/20 transition-all"
                 >
                   {isBusy ? (
@@ -533,7 +528,7 @@ export function WhatsAppConnectionCard() {
                 </Button>
               ) : (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs text-amber-700 text-left space-y-2">
-                  <strong>{isMetaConfigLoading ? "Verificando configuração da Meta..." : "⚠ Configuração necessária para Embedded Signup:"}</strong>
+                  <strong>{isMetaConfigLoading ? "Verificando configuração da Meta..." : "⚠ Configuração necessária para OAuth Meta:"}</strong>
                   {!isMetaConfigLoading && (
                     <div className="space-y-2">
                       <p>Faltando: {metaConfig?.missing?.join(", ") || "diagnóstico indisponível"}.</p>
@@ -544,28 +539,25 @@ export function WhatsAppConnectionCard() {
                     </div>
                   )}
                   <p className="text-[10px] text-amber-600 mt-1">
-                    O App ID e Config ID podem vir do build do frontend ou do diagnóstico autenticado da Edge Function; o App Secret nunca é exposto ao navegador.
+                    O App ID pode vir do build do frontend ou do diagnóstico autenticado da Edge Function; o App Secret nunca é exposto ao navegador.
                   </p>
                 </div>
               )}
 
-              {/* SDK status indicator */}
               {isMetaReady && (
                 <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
-                  <span className={`h-1.5 w-1.5 rounded-full ${sdkLoaded ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
-                  <span>{sdkLoaded ? "Facebook SDK pronto" : "Carregando Facebook SDK..."}</span>
-                  {sdkLoaded && (
-                    <span className="text-emerald-500 ml-1">
-                      • App ID: {activeMetaAppId?.substring(0, 6)}... • Config ID: {activeMetaConfigId?.substring(0, 6)}...
-                    </span>
-                  )}
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span>OAuth manual Meta pronto</span>
+                  <span className="text-emerald-500 ml-1">
+                    • App ID: {activeMetaAppId?.substring(0, 6)}...{activeMetaConfigId ? ` • Config ID: ${activeMetaConfigId.substring(0, 6)}...` : ""}
+                  </span>
                 </div>
               )}
 
               {isMetaReady && (
                 <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-left text-[10px] text-muted-foreground">
-                  <div className="font-mono break-all">oauth_dialog_redirect_uri={REDIRECT_URI}</div>
-                  <div className="font-mono break-all">token_exchange_redirect_uri={REDIRECT_URI}</div>
+                  <div className="font-mono break-all">oauth_dialog_redirect_uri={OAUTH_CALLBACK_REDIRECT_URI}</div>
+                  <div className="font-mono break-all">token_exchange_redirect_uri={OAUTH_CALLBACK_REDIRECT_URI}</div>
                 </div>
               )}
 
@@ -592,7 +584,7 @@ export function WhatsAppConnectionCard() {
             </div>
             <div className="flex gap-2">
               {isMetaReady && (
-                <Button size="sm" onClick={handleEmbeddedSignup} disabled={isBusy || !sdkLoaded}>
+                <Button size="sm" onClick={handleManualOAuth} disabled={isBusy}>
                   {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                   Reconectar via Meta
                 </Button>
