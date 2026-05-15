@@ -136,13 +136,15 @@ Deno.serve(async (req) => {
     const stateParam = url.searchParams.get("state");
     const metaErrorParam = url.searchParams.get("error") || url.searchParams.get("error_message");
     const { metaAppId: META_APP_ID, metaConfigId: META_CONFIG_ID, metaAppSecret: META_APP_SECRET } = getMetaConfig();
-    const oauthDialogRedirectUri = REDIRECT_URI;
+    const oauthDialogRedirectUri = OAUTH_CALLBACK_REDIRECT_URI;
+    const tokenExchangeRedirectUri = OAUTH_CALLBACK_REDIRECT_URI;
 
     let userId = "";
     let isFromOAuthCallback = false;
 
     const redirectToApp = (status: "connected" | "error", message?: string) => {
-      const returnUrl = new URL(REDIRECT_URI);
+      const returnUrl = new URL(APP_RETURN_URI);
+      if (status === "connected") returnUrl.searchParams.set("success", "1");
       returnUrl.searchParams.set("whatsapp_connected", status === "connected" ? "true" : "false");
       if (status === "error") returnUrl.searchParams.set("whatsapp_error", message?.substring(0, 180) || "unknown");
       console.log("[whatsapp-connect] LOG redirect-back-url:", returnUrl.toString());
@@ -175,13 +177,11 @@ Deno.serve(async (req) => {
       isFromOAuthCallback = true;
 
       const statePayload = await verifyOAuthState(stateParam, META_APP_SECRET).catch(() => null);
-      if (!statePayload) {
-        return redirectToApp("error", "State OAuth inválido ou expirado.");
+      if (statePayload?.userId) {
+        userId = statePayload.userId;
+        console.log("[whatsapp-connect] ✅ OAuth callback userId from state:", userId);
       }
-
-      userId = statePayload.userId;
       requestBody = { code: codeParam, wabaId: url.searchParams.get("waba_id") || undefined, phoneNumberId: url.searchParams.get("phone_number_id") || undefined };
-      console.log("[whatsapp-connect] ✅ OAuth callback userId:", userId);
     }
 
     // ── Auth ─────────────────────────────────────────────
