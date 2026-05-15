@@ -151,7 +151,6 @@ export function useWhatsAppConnection() {
       const missing: string[] = [];
 
       if (!appId) missing.push("VITE_META_APP_ID / META_APP_ID");
-      if (!configId) missing.push("VITE_META_CONFIG_ID");
       if (!(statusData as any)?.hasMetaAppSecret) missing.push("META_APP_SECRET");
 
       return {
@@ -162,7 +161,7 @@ export function useWhatsAppConnection() {
         hasBackendAppId: Boolean((statusData as any)?.hasMetaAppId),
         hasBackendConfigId: Boolean((statusData as any)?.hasMetaConfigId),
         hasMetaAppSecret: Boolean((statusData as any)?.hasMetaAppSecret),
-        ready: Boolean(appId && configId && (statusData as any)?.hasMetaAppSecret && !publicError),
+        ready: Boolean(appId && (statusData as any)?.hasMetaAppSecret && !publicError),
         missing,
         error: publicError,
       };
@@ -170,48 +169,6 @@ export function useWhatsAppConnection() {
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
     retry: false,
-  });
-
-  // ── Embedded Signup — FB.login() flow ───────────────────
-  // The frontend now uses the Facebook JS SDK (FB.login with config_id)
-  // to get the authorization code directly. No server-side OAuth URL needed.
-  // The code + waba_id + phone_number_id are sent here:
-
-
-  // ── Embedded Signup — primary flow ────────────────────
-  const connectViaEmbeddedSignup = useMutation({
-    mutationFn: async (input: {
-      code: string;
-      wabaId?: string;
-      phoneNumberId?: string;
-      redirectUri: string;
-    }) => {
-      console.log("🚀 [WhatsApp] Embedded Signup — enviando code para backend...", {
-        codeLength: input.code?.length,
-        wabaId: input.wabaId,
-        phoneNumberId: input.phoneNumberId,
-        redirectUri: input.redirectUri,
-      });
-
-      // invokeEdgeFunction handles both HTTP and logical errors
-      const result = await invokeEdgeFunction("whatsapp-connect", {
-        code: input.code,
-        wabaId: input.wabaId || null,
-        phoneNumberId: input.phoneNumberId || null,
-        redirectUri: input.redirectUri,
-      });
-
-      console.log("✅ [WhatsApp] Resposta do backend:", result);
-      return result;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["whatsapp_connection"] });
-      toast.success("WhatsApp Business conectado com sucesso!");
-    },
-    onError: (e) => {
-      console.error("❌ [WhatsApp] Erro na conexão:", e.message);
-      toast.error("Erro ao conectar: " + e.message);
-    },
   });
 
   const startManualOAuth = useMutation({
