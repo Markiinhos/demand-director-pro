@@ -7,7 +7,9 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
-const REDIRECT_URI = "https://demand-director-pro.lovable.app/whatsapp/";
+const APP_RETURN_URI = "https://demand-director-pro.lovable.app/whatsapp";
+const OAUTH_CALLBACK_REDIRECT_URI = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
+const META_OAUTH_SCOPES = "business_management,whatsapp_business_management,whatsapp_business_messaging";
 
 type ConnectRequestBody = {
   action?: string;
@@ -41,7 +43,7 @@ function metaConfigStatus() {
     hasMetaAppId: Boolean(metaAppId),
     hasMetaAppSecret: Boolean(metaAppSecret),
     hasMetaConfigId: Boolean(metaConfigId),
-    ready: Boolean(metaAppId && metaAppSecret && metaConfigId),
+    ready: Boolean(metaAppId && metaAppSecret),
   };
 }
 
