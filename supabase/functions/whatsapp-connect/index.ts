@@ -233,7 +233,8 @@ Deno.serve(async (req) => {
 
     // ══════════════════════════════════════════════════════
     // STEP 1: Exchange code for token
-    // Uses the SAME redirect_uri that was used in FB.login()
+    // FB.login / Embedded Signup may bind the code to an internal SDK redirect_uri.
+    // For this flow, intentionally omit redirect_uri in the token exchange.
     // ══════════════════════════════════════════════════════
     console.log("[whatsapp-connect] LOG code-exchange-start");
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback, "| codeLen:", code.length);
@@ -241,34 +242,36 @@ Deno.serve(async (req) => {
 
     console.log("[whatsapp-connect] ════ redirect_uri diagnostic ════");
     console.log("oauth_dialog_redirect_uri", oauthDialogRedirectUri);
-    console.log("token_exchange_redirect_uri", REDIRECT_URI);
+    console.log("token_exchange_redirect_uri", "(omitted)");
     console.log("client_sent_redirect_uri", requestBody?.redirectUri || "(none)");
-    console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", REDIRECT_URI);
+    console.log("[whatsapp-connect] redirect_uri enviado no token exchange:", "(omitted)");
+    console.log("[whatsapp-connect] token exchange redirect_uri omitted:", true);
     console.log("[whatsapp-connect] isFromOAuthCallback:", isFromOAuthCallback);
     console.log("[whatsapp-connect] ════════════════════════════════════════════════════");
 
-    const redirectUri = REDIRECT_URI;
     const tokenExchangeUrl = `${GRAPH_API}/oauth/access_token`;
     const tokenExchangeBody = new URLSearchParams({
       client_id: META_APP_ID,
       client_secret: META_APP_SECRET,
       code,
-      redirect_uri: redirectUri,
     });
     const tokenExchangeDebug = {
       oauth_dialog_redirect_uri: oauthDialogRedirectUri,
-      token_exchange_redirect_uri: redirectUri,
+      token_exchange_redirect_uri: null,
+      token_exchange_redirect_uri_omitted: true,
       app_id: META_APP_ID,
       graph_endpoint: tokenExchangeUrl,
     };
-    const maskedTokenExchangeBody = new URLSearchParams(tokenExchangeBody);
-    maskedTokenExchangeBody.set("client_secret", "***");
-    maskedTokenExchangeBody.set("code", "***");
+    const tokenExchangePayloadForLog = {
+      client_id: META_APP_ID,
+      code: `*** length=${code.length}`,
+    };
 
-    console.log("TOKEN_EXCHANGE_REDIRECT_URI_FINAL", redirectUri);
-    console.log("Backend token exchange redirect_uri:", redirectUri);
+    console.log("TOKEN_EXCHANGE_REDIRECT_URI_FINAL", "(omitted)");
+    console.log("Backend token exchange redirect_uri:", "(omitted)");
     console.log("[whatsapp-connect] TOKEN EXCHANGE final POST URL:", tokenExchangeUrl);
-    console.log("[whatsapp-connect] TOKEN EXCHANGE POST body (masked):", maskedTokenExchangeBody.toString());
+    console.log("[whatsapp-connect] TOKEN EXCHANGE payload sem client_secret:", JSON.stringify(tokenExchangePayloadForLog));
+    console.log("[whatsapp-connect] TOKEN EXCHANGE redirect_uri omitted or sent:", "omitted");
     console.log("[whatsapp-connect] TOKEN EXCHANGE debug sanitized:", JSON.stringify(tokenExchangeDebug));
 
     const tokenRes = await fetch(tokenExchangeUrl, {
@@ -280,7 +283,7 @@ Deno.serve(async (req) => {
     const safeTokenResData = tokenResData?.access_token
       ? { ...tokenResData, access_token: `*** length=${String(tokenResData.access_token).length}` }
       : tokenResData;
-    console.log("[whatsapp-connect] resposta completa da Meta (token exchange):", JSON.stringify(safeTokenResData));
+    console.log("[whatsapp-connect] resposta bruta da Meta (token exchange, token masked):", JSON.stringify(safeTokenResData));
 
     let tokenData: Record<string, unknown> | null = null;
     let lastTokenError = "";
