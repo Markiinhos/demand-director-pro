@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
       return redirectToApp("error", metaErrorParam);
     }
 
-    // ── OAuth GET callback (legacy redirect flow) ────────
+    // ── OAuth GET callback (manual Meta OAuth redirect flow) ────────
     if (req.method === "GET" && codeParam) {
       console.log("[whatsapp-connect] LOG callback-received (GET)");
       isFromOAuthCallback = true;
@@ -436,14 +436,14 @@ Deno.serve(async (req) => {
         display_name: displayName || null,
         access_token_encrypted: accessToken,
         status: "connected",
-        metadata: { connected_via: isFromOAuthCallback ? "oauth_callback" : "embedded_signup_sdk", connected_at: new Date().toISOString() },
+        metadata: { connected_via: isFromOAuthCallback ? "manual_oauth_callback" : "manual_oauth_post", connected_at: new Date().toISOString() },
       }, { onConflict: "user_id,phone_number_id" })
       .select("id, phone_number_id, phone_number, display_name, business_account_id, status, webhook_verify_token, created_at")
       .single();
 
     if (saveError) {
       console.error("[whatsapp-connect] LOG connection-save-error:", saveError.message, saveError.details);
-      return respondError("Erro ao salvar connexão: " + saveError.message);
+      return respondError("Erro ao salvar conexão: " + saveError.message);
     }
 
     console.log("[whatsapp-connect] LOG connection-save-success:", savedConn?.id);
