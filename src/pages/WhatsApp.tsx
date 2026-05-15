@@ -52,12 +52,13 @@ export default function WhatsApp() {
     if (callbackHandled.current) return;
 
     const connected = searchParams.get("whatsapp_connected");
+    const success = searchParams.get("success");
     const error = searchParams.get("whatsapp_error");
 
     // Also support legacy param format
     const legacyWhatsapp = searchParams.get("whatsapp");
 
-    if (connected === "true" || legacyWhatsapp === "connected") {
+    if (success === "1" || connected === "true" || legacyWhatsapp === "connected") {
       callbackHandled.current = true;
       console.log("✅ [WhatsApp] Callback detected: connection successful!");
       toast.success("WhatsApp Business conectado com sucesso! 🎉", {
@@ -70,6 +71,7 @@ export default function WhatsApp() {
       const cleanParams = new URLSearchParams(searchParams);
       cleanParams.delete("whatsapp_connected");
       cleanParams.delete("whatsapp_error");
+      cleanParams.delete("success");
       cleanParams.delete("whatsapp");
       cleanParams.delete("message");
       setSearchParams(cleanParams, { replace: true });
@@ -85,6 +87,7 @@ export default function WhatsApp() {
       const cleanParams = new URLSearchParams(searchParams);
       cleanParams.delete("whatsapp_connected");
       cleanParams.delete("whatsapp_error");
+      cleanParams.delete("success");
       cleanParams.delete("whatsapp");
       cleanParams.delete("message");
       setSearchParams(cleanParams, { replace: true });
