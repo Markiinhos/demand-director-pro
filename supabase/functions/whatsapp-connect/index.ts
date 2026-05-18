@@ -9,7 +9,7 @@ const GRAPH_API = "https://graph.facebook.com/v22.0";
 const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
 const APP_RETURN_URI = "https://demand-director-pro.lovable.app/whatsapp";
 const OAUTH_CALLBACK_REDIRECT_URI = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
-const META_OAUTH_SCOPES = "business_management,whatsapp_business_management,whatsapp_business_messaging";
+const META_OAUTH_SCOPES = "whatsapp_business_management,whatsapp_business_messaging";
 
 type ConnectRequestBody = {
   action?: string;
