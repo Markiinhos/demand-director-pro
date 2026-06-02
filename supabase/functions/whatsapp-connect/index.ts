@@ -27,6 +27,7 @@ type OAuthStatePayload = {
 
 type GranularScope = {
   permission?: string;
+  scope?: string;
   target_ids?: string[];
 };
 
