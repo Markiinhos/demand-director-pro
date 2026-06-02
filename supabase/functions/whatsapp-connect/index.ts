@@ -27,6 +27,7 @@ type OAuthStatePayload = {
 
 type GranularScope = {
   permission?: string;
+  scope?: string;
   target_ids?: string[];
 };
 
@@ -330,17 +331,17 @@ Deno.serve(async (req) => {
 
       const scopes: GranularScope[] = Array.isArray(debugData?.data?.granular_scopes) ? debugData.data.granular_scopes : [];
       for (const s of scopes) {
-        console.log("[whatsapp-connect]   scope:", s.permission, "→", s.target_ids);
+        console.log("[whatsapp-connect]   scope:", s.scope || s.permission, "→", s.target_ids);
       }
 
       if (!resolvedWabaId) {
-        const wa = scopes.find(s => s.permission === "whatsapp_business_management");
-        if (wa?.target_ids?.[0]) { resolvedWabaId = wa.target_ids[0]; console.log("[whatsapp-connect] ✅ WABA from debug:", resolvedWabaId); }
+        const wa =
+          scopes.find(s => (s.scope || s.permission) === "whatsapp_business_management") ||
+          scopes.find(s => (s.scope || s.permission) === "whatsapp_business_messaging");
+        if (wa?.target_ids?.[0]) { resolvedWabaId = wa.target_ids[0]; console.log("[whatsapp-connect] ✅ captured_waba_id (debug):", resolvedWabaId); }
       }
-      if (!resolvedPhoneNumberId) {
-        const msg = scopes.find(s => s.permission === "whatsapp_business_messaging");
-        if (msg?.target_ids?.[0]) { resolvedPhoneNumberId = msg.target_ids[0]; console.log("[whatsapp-connect] ✅ Phone from debug:", resolvedPhoneNumberId); }
-      }
+      console.log("[whatsapp-connect] captured_waba_id:", resolvedWabaId || "(none)");
+      console.log("[whatsapp-connect] captured_phone_number_id (initial):", resolvedPhoneNumberId || "(none)");
       console.log("[whatsapp-connect] LOG graph-waba-fetch-success");
     } catch (e: unknown) {
       console.error("[whatsapp-connect] debug_token error:", e instanceof Error ? e.message : e);
@@ -351,11 +352,12 @@ Deno.serve(async (req) => {
       try {
         const r = await fetch(`${GRAPH_API}/${resolvedWabaId}/phone_numbers?access_token=${accessToken}`);
         const d = await r.json();
+        console.log("[whatsapp-connect] graph_phone_numbers_response:", JSON.stringify(d)?.substring(0, 800));
         if (d?.data?.[0]) {
           resolvedPhoneNumberId = d.data[0].id;
           phoneNumber = d.data[0].display_phone_number || "";
           displayName = d.data[0].verified_name || "";
-          console.log("[whatsapp-connect] ✅ Phone from WABA:", resolvedPhoneNumberId);
+          console.log("[whatsapp-connect] ✅ phone_number_detected (from WABA):", resolvedPhoneNumberId);
         }
       } catch (e: unknown) { console.error("[whatsapp-connect] WABA phones error:", e instanceof Error ? e.message : e); }
     }
