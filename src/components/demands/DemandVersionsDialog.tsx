@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Upload, Download } from "lucide-react";
 import { toast } from "sonner";
+import { getSignedFileUrl } from "@/lib/storage";
 
 export function DemandVersionsDialog({ demandId, trigger }: { demandId: string; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -18,6 +19,12 @@ export function DemandVersionsDialog({ demandId, trigger }: { demandId: string; 
     if (!file) return toast.error("Escolha um arquivo");
     await upload.mutateAsync({ file, notes });
     setFile(null); setNotes("");
+  };
+
+  const openSigned = async (urlOrPath: string) => {
+    const u = await getSignedFileUrl(urlOrPath);
+    if (!u) return toast.error("Arquivo indisponível");
+    window.open(u, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -42,7 +49,11 @@ export function DemandVersionsDialog({ demandId, trigger }: { demandId: string; 
                   <Badge variant="outline">V{v.version_number}</Badge> <span className="ml-2">{v.file_name}</span>
                   {v.notes && <p className="text-xs text-muted-foreground">{v.notes}</p>}
                 </div>
-                {v.file_url && <Button size="sm" variant="ghost" asChild><a href={v.file_url} target="_blank" rel="noreferrer"><Download className="h-4 w-4" /></a></Button>}
+                {v.file_url && (
+                  <Button size="sm" variant="ghost" onClick={() => openSigned(v.file_url!)}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
