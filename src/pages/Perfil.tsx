@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Upload, User as UserIcon, Lock, Mail } from "lucide-react";
+import { getSignedFileUrl } from "@/lib/storage";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function Perfil() {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,6 +32,13 @@ export default function Perfil() {
       setLoading(false);
     })();
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!avatarUrl) { setAvatarPreview(null); return; }
+    getSignedFileUrl(avatarUrl).then((u) => { if (!cancelled) setAvatarPreview(u); });
+    return () => { cancelled = true; };
+  }, [avatarUrl]);
 
   const initials = (name || user?.email || "?").slice(0, 2).toUpperCase();
 
@@ -54,9 +63,8 @@ export default function Perfil() {
       setUploading(false);
       return;
     }
-    const { data } = supabase.storage.from("client-files").getPublicUrl(path);
-    await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", user.id);
-    setAvatarUrl(data.publicUrl);
+    await supabase.from("profiles").update({ avatar_url: path }).eq("id", user.id);
+    setAvatarUrl(path);
     setUploading(false);
     toast({ title: "Avatar atualizado" });
   };
@@ -100,7 +108,7 @@ export default function Perfil() {
           <div className="bg-card border border-border/50 rounded-xl p-6 space-y-6">
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
-                {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
+                {avatarPreview && <AvatarImage src={avatarPreview} alt={name} />}
                 <AvatarFallback className="text-lg">{initials}</AvatarFallback>
               </Avatar>
               <div>
