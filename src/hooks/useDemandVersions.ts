@@ -43,12 +43,11 @@ export function useDemandVersions(demandId?: string) {
       const path = `${user.id}/demands/${demandId}/v${next}-${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("client-files").upload(path, file);
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("client-files").getPublicUrl(path);
       const { error } = await supabase.from("demand_versions").insert({
         user_id: user.id,
         demand_id: demandId,
         version_number: next,
-        file_url: pub.publicUrl,
+        file_url: path,
         file_name: file.name,
         notes: notes ?? null,
       });
