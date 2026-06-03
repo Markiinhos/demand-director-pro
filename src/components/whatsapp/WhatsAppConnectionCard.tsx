@@ -348,22 +348,41 @@ export function WhatsAppConnectionCard() {
         {isConnected && connection && (
           <div className="space-y-4">
             {/* Connection details */}
-            <div className="grid grid-cols-2 gap-3 text-xs bg-muted/30 rounded-lg p-3">
-              <div className="flex items-center gap-1.5">
-                <Phone className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Número:</span>
-                <span className="font-medium">{connection.phone_number || "—"}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Número WhatsApp</div>
+                  <div className="font-semibold text-sm">{connection.phone_number || "—"}</div>
+                </div>
               </div>
-              {connection.display_name && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">Nome:</span>
-                  <span className="font-medium">{connection.display_name}</span>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Empresa</div>
+                  <div className="font-semibold text-sm">{connection.display_name || "—"}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Status</div>
+                  <div className="font-semibold text-sm capitalize">{connection.status}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Conectado em</div>
+                  <div className="font-semibold text-sm">{new Date(connection.created_at).toLocaleString("pt-BR")}</div>
+                </div>
+              </div>
+              {connection.business_account_id && (
+                <div className="sm:col-span-2 flex items-center gap-2 pt-2 border-t border-border/30">
+                  <span className="text-[10px] text-muted-foreground uppercase">WABA ID:</span>
+                  <code className="text-[10px] font-mono">{connection.business_account_id}</code>
                 </div>
               )}
-              <div className="col-span-2 flex items-center gap-1.5">
-                <span className="text-muted-foreground">Conectado em:</span>
-                <span>{new Date(connection.created_at).toLocaleString("pt-BR")}</span>
-              </div>
             </div>
 
             {/* Webhook info */}
