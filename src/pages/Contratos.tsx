@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Upload, Trash2, Download, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+import { getSignedFileUrl } from "@/lib/storage";
 
 export default function Contratos() {
   const { templates, upload, remove: removeTpl } = useContractTemplates();
@@ -44,8 +45,10 @@ export default function Contratos() {
     setOpenGen(false); setTplId(""); setClientId(""); setTitle(""); setVars({}); setIncludeLogo(true);
   };
 
-  const sendWhatsapp = (phone: string | null, url: string, title: string) => {
+  const sendWhatsapp = async (phone: string | null, urlOrPath: string, title: string) => {
     if (!phone) return toast.error("Cliente sem telefone");
+    const url = await getSignedFileUrl(urlOrPath, 60 * 60 * 24 * 7);
+    if (!url) return toast.error("Arquivo indisponível");
     const msg = encodeURIComponent(`Olá! Segue o contrato "${title}": ${url}`);
     const cleaned = phone.replace(/\D/g, "");
     window.open(`https://wa.me/${cleaned}?text=${msg}`, "_blank");
@@ -119,7 +122,11 @@ export default function Contratos() {
                 <CardContent className="flex gap-2">
                   {c.generated_pdf_url && (
                     <>
-                      <Button size="sm" variant="outline" asChild><a href={c.generated_pdf_url} target="_blank" rel="noreferrer"><Download className="h-3 w-3 mr-1" /> Baixar</a></Button>
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        const u = await getSignedFileUrl(c.generated_pdf_url!);
+                        if (!u) return toast.error("Arquivo indisponível");
+                        window.open(u, "_blank", "noopener,noreferrer");
+                      }}><Download className="h-3 w-3 mr-1" /> Baixar</Button>
                       <Button size="sm" variant="outline" onClick={() => sendWhatsapp(client?.phone ?? null, c.generated_pdf_url, c.title)}><MessageCircle className="h-3 w-3 mr-1" /> WhatsApp</Button>
                     </>
                   )}
