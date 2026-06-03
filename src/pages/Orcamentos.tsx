@@ -14,6 +14,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { exportBudgetPDF } from "@/lib/budgets/export-pdf";
 import { PublicProposalButton } from "@/components/budgets/PublicProposalButton";
 import { urlToDataUrl } from "@/lib/imageToDataUrl";
+import { getSignedFileUrl } from "@/lib/storage";
 import { toast } from "sonner";
 
 type BudgetStatus = Database["public"]["Enums"]["budget_status"];
@@ -113,11 +114,14 @@ export default function Orcamentos() {
     try {
       const items = await getItems(budgetId);
       if (items.length === 0) { toast.error("Orçamento sem itens para exportar"); return; }
-      const logoUrl = (client as any)?.logo_url as string | null | undefined;
+      const stored = (client as any)?.logo_url as string | null | undefined;
       let clientLogoDataUrl: string | null = null;
-      if (logoUrl) {
+      if (stored) {
         const includeLogo = window.confirm("Incluir a logo do cliente neste PDF?");
-        if (includeLogo) clientLogoDataUrl = await urlToDataUrl(logoUrl);
+        if (includeLogo) {
+          const signed = await getSignedFileUrl(stored);
+          if (signed) clientLogoDataUrl = await urlToDataUrl(signed);
+        }
       }
       exportBudgetPDF({ budget, items, clientName: client?.name || "Cliente", clientLogoDataUrl });
       toast.success("PDF gerado com sucesso");
