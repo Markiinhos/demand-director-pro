@@ -5,8 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GRAPH_API = "https://graph.facebook.com/v22.0";
-const META_OAUTH_DIALOG = "https://www.facebook.com/v22.0/dialog/oauth";
+const GRAPH_API = "https://graph.facebook.com/v23.0";
+const META_OAUTH_DIALOG = "https://www.facebook.com/v23.0/dialog/oauth";
 const APP_RETURN_URI = "https://demand-director-pro.lovable.app/whatsapp";
 const OAUTH_CALLBACK_REDIRECT_URI = "https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/whatsapp-connect";
 const META_OAUTH_SCOPES = "whatsapp_business_management,whatsapp_business_messaging";
@@ -17,6 +17,7 @@ type ConnectRequestBody = {
   wabaId?: string;
   phoneNumberId?: string;
   redirectUri?: string;
+  accessToken?: string;
 };
 
 type OAuthStatePayload = {
@@ -93,6 +94,21 @@ function jsonError(error: string, details?: Record<string, unknown>) {
 }
 function jsonSuccess(data: unknown) {
   return jsonOk({ success: true, ...data as Record<string, unknown> });
+}
+
+function isTestNumber(displayName?: string | null, phone?: string | null) {
+  const n = (displayName || "").trim().toLowerCase();
+  const p = (phone || "").replace(/\s+/g, "");
+  return n === "test number" || p.startsWith("+1555") || p.startsWith("15556") || p.startsWith("+1555647");
+}
+
+async function fetchWabaPhoneNumbers(wabaId: string, accessToken: string) {
+  const r = await fetch(`${GRAPH_API}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status&access_token=${accessToken}`);
+  const d = await r.json();
+  if (!r.ok || d?.error) {
+    throw new Error(d?.error?.message || `Falha ao listar números (HTTP ${r.status})`);
+  }
+  return (d?.data || []) as Array<{ id: string; display_phone_number?: string; verified_name?: string; quality_rating?: string; code_verification_status?: string; name_status?: string }>;
 }
 
 Deno.serve(async (req) => {
