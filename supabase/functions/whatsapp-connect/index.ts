@@ -527,6 +527,11 @@ Deno.serve(async (req) => {
       return respondError("Não foi possível identificar o Phone Number ID.", { resolvedWabaId });
     }
 
+    if (isTestNumber(displayName, phoneNumber)) {
+      console.error("[whatsapp-connect] ❌ Test number detected — refusing to save");
+      return respondError("Você autorizou o número de teste da Meta (Test Number). Adicione um número real do WhatsApp Business no Gerenciador da Meta e refaça a conexão.");
+    }
+
     console.log("[whatsapp-connect] LOG connection-save-start", { userId, phoneNumberId: resolvedPhoneNumberId, wabaId: resolvedWabaId, phoneNumber, displayName });
 
     const { data: savedConn, error: saveError } = await supabase
