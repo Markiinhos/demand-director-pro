@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Upload, X, Loader2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useEffect } from "react";
+import { getSignedFileUrl } from "@/lib/storage";
 
 interface Props {
   value: string | null;
@@ -14,6 +16,14 @@ interface Props {
 export function ClientLogoUpload({ value, onChange }: Props) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!value) { setPreviewUrl(null); return; }
+    getSignedFileUrl(value).then((u) => { if (!cancelled) setPreviewUrl(u); });
+    return () => { cancelled = true; };
+  }, [value]);
 
   const handleFile = async (file: File) => {
     if (!user) return;
@@ -25,8 +35,7 @@ export function ClientLogoUpload({ value, onChange }: Props) {
       const path = `${user.id}/client-logos/${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from("client-files").upload(path, file, { upsert: true });
       if (error) throw error;
-      const { data } = supabase.storage.from("client-files").getPublicUrl(path);
-      onChange(data.publicUrl);
+      onChange(path);
       toast.success("Logo enviada");
     } catch (e: any) {
       toast.error("Erro ao enviar logo: " + e.message);
@@ -40,8 +49,8 @@ export function ClientLogoUpload({ value, onChange }: Props) {
       <Label>Logo do cliente</Label>
       <div className="flex items-center gap-3 mt-1">
         <div className="h-16 w-16 rounded-lg border border-border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
-          {value ? (
-            <img src={value} alt="Logo" className="h-full w-full object-contain" />
+          {previewUrl ? (
+            <img src={previewUrl} alt="Logo" className="h-full w-full object-contain" />
           ) : (
             <ImageIcon className="h-6 w-6 text-muted-foreground" />
           )}
