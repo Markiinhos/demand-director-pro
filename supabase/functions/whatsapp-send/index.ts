@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_API_URL = "https://graph.facebook.com/v21.0";
+const WHATSAPP_API_URL = "https://graph.facebook.com/v23.0";
 
 function getMetaConfigStatus() {
   const metaAppId = Deno.env.get("META_APP_ID") || Deno.env.get("VITE_META_APP_ID") || "";
@@ -136,7 +136,14 @@ Deno.serve(async (req) => {
     const waData = await waResponse.json();
 
     if (!waResponse.ok) {
-      const errorMsg = waData?.error?.message || "WhatsApp API error";
+      const rawMsg = waData?.error?.message || "WhatsApp API error";
+      const code = waData?.error?.code;
+      let errorMsg = rawMsg;
+      if (code === 131030) {
+        errorMsg = "Número do destinatário não está na lista permitida. Isso geralmente significa que sua conta WhatsApp está em modo de testes/sandbox. Adicione um número real e verificado no Gerenciador da Meta para enviar para qualquer contato.";
+      } else if (code === 190 || code === 200) {
+        errorMsg = "Access Token inválido ou expirado. Reconecte sua conta WhatsApp em Configurações.";
+      }
       await supabase.from("whatsapp_messages").update({
         status: "failed",
         error_message: errorMsg,
