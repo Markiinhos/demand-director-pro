@@ -246,6 +246,89 @@ Deno.serve(async (req) => {
 
     // ── Service role client ──────────────────────────────
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // ══════════════════════════════════════════════════════
+    // MANUAL: validate Access Token + WABA → list phone numbers
+    // ══════════════════════════════════════════════════════
+    if (requestBody?.action === "manual-validate") {
+      const at = (requestBody.accessToken || "").trim();
+      const waba = (requestBody.wabaId || "").trim();
+      if (!at) return jsonError("Access Token é obrigatório.");
+      if (!waba) return jsonError("WhatsApp Business Account ID é obrigatório.");
+      try {
+        const numbers = await fetchWabaPhoneNumbers(waba, at);
+        if (numbers.length === 0) {
+          return jsonError("Nenhum número encontrado nesta WABA. Adicione um número real no Gerenciador da Meta.");
+        }
+        const enriched = numbers.map(n => ({ ...n, is_test: isTestNumber(n.verified_name, n.display_phone_number) }));
+        const onlyTest = enriched.every(n => n.is_test);
+        if (onlyTest) {
+          return jsonError("Esta conta possui apenas o número de teste da Meta. Adicione um número real do WhatsApp Business no Gerenciador da Meta para conectar.", { numbers: enriched });
+        }
+        return jsonSuccess({ numbers: enriched });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return jsonError(`Credenciais inválidas: ${msg}`);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // MANUAL: save connection (token + WABA + phone)
+    // ══════════════════════════════════════════════════════
+    if (requestBody?.action === "manual-save") {
+      const at = (requestBody.accessToken || "").trim();
+      const waba = (requestBody.wabaId || "").trim();
+      let pid = (requestBody.phoneNumberId || "").trim();
+      if (!at || !waba) return jsonError("Access Token e WABA ID são obrigatórios.");
+
+      let numbers: Array<{ id: string; display_phone_number?: string; verified_name?: string; quality_rating?: string; code_verification_status?: string }>;
+      try {
+        numbers = await fetchWabaPhoneNumbers(waba, at);
+      } catch (e) {
+        return jsonError(`Credenciais inválidas: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      if (numbers.length === 0) return jsonError("Nenhum número disponível nesta WABA.");
+      if (!pid && numbers.length === 1) pid = numbers[0].id;
+      if (!pid) return jsonError("Selecione um número de telefone.", { numbers });
+
+      const selected = numbers.find(n => n.id === pid);
+      if (!selected) return jsonError("Número selecionado não pertence a esta WABA.");
+      if (isTestNumber(selected.verified_name, selected.display_phone_number)) {
+        return jsonError("Não é possível conectar o número de teste da Meta. Use um número real do WhatsApp Business.");
+      }
+
+      // Subscribe app + register phone (best effort)
+      try {
+        await fetch(`${GRAPH_API}/${waba}/subscribed_apps`, { method: "POST", headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" } });
+      } catch (_) { /* ignore */ }
+      try {
+        await fetch(`${GRAPH_API}/${pid}/register`, { method: "POST", headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000" }) });
+      } catch (_) { /* ignore */ }
+
+      const { data: savedConn, error: saveError } = await supabase
+        .from("whatsapp_connections")
+        .upsert({
+          user_id: userId,
+          provider: "meta_whatsapp",
+          phone_number_id: pid,
+          business_account_id: waba,
+          phone_number: selected.display_phone_number || null,
+          display_name: selected.verified_name || null,
+          access_token_encrypted: at,
+          status: "connected",
+          metadata: {
+            connected_via: "manual_credentials",
+            connected_at: new Date().toISOString(),
+            quality_rating: selected.quality_rating || null,
+            code_verification_status: selected.code_verification_status || null,
+          },
+        }, { onConflict: "user_id,phone_number_id" })
+        .select("id, phone_number_id, phone_number, display_name, business_account_id, status, webhook_verify_token, created_at, metadata")
+        .single();
+      if (saveError) return jsonError("Erro ao salvar conexão: " + saveError.message);
+      return jsonSuccess({ connection: savedConn });
+    }
+
     const { code, wabaId, phoneNumberId } = requestBody || {};
 
     if (!code) {
