@@ -2,9 +2,11 @@ import { useState, useCallback } from "react";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   MessageSquare, CheckCircle2, AlertCircle, Loader2, Unlink,
-  RefreshCw, Phone, Send, ShieldCheck, Copy,
+  RefreshCw, Phone, Send, ShieldCheck, Copy, KeyRound, Building2, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,10 +19,16 @@ export function WhatsAppConnectionCard() {
     connection, isLoading, isConnected, templates,
     metaConfig, isMetaConfigLoading,
     startManualOAuth, disconnect, reconnect, testSend,
+    validateManualCredentials, saveManualConnection,
   } = useWhatsAppConnection();
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"oauth" | "manual">("oauth");
+  const [manualToken, setManualToken] = useState("");
+  const [manualWaba, setManualWaba] = useState("");
+  const [manualNumbers, setManualNumbers] = useState<Awaited<ReturnType<typeof validateManualCredentials.mutateAsync>>>([]);
+  const [selectedNumberId, setSelectedNumberId] = useState<string>("");
 
   const activeMetaAppId = metaConfig?.appId || META_APP_ID;
   const isMetaReady = Boolean(metaConfig?.ready && activeMetaAppId);
@@ -77,6 +85,36 @@ export function WhatsAppConnectionCard() {
   const StatusIcon = currentStatus.icon;
   const isBusy = isConnecting || startManualOAuth.isPending;
 
+  const handleValidateManual = async () => {
+    if (!manualToken.trim() || !manualWaba.trim()) {
+      toast.error("Preencha Access Token e WABA ID");
+      return;
+    }
+    try {
+      const nums = await validateManualCredentials.mutateAsync({ accessToken: manualToken.trim(), wabaId: manualWaba.trim() });
+      setManualNumbers(nums);
+      const real = nums.filter(n => !n.is_test);
+      if (real.length === 1) setSelectedNumberId(real[0].id);
+      else setSelectedNumberId("");
+      toast.success(`${nums.length} número(s) encontrado(s)`);
+    } catch (_) { /* toast handled in hook */ }
+  };
+
+  const handleSaveManual = async () => {
+    if (manualNumbers.length > 1 && !selectedNumberId) {
+      toast.error("Selecione um número");
+      return;
+    }
+    try {
+      await saveManualConnection.mutateAsync({
+        accessToken: manualToken.trim(),
+        wabaId: manualWaba.trim(),
+        phoneNumberId: selectedNumberId || manualNumbers[0]?.id,
+      });
+      setManualToken(""); setManualWaba(""); setManualNumbers([]); setSelectedNumberId("");
+    } catch (_) { /* toast handled */ }
+  };
+
   return (
     <div className="space-y-4">
       {/* ════ Main Connection Card ════ */}
@@ -107,6 +145,93 @@ export function WhatsAppConnectionCard() {
         {/* ──── Disconnected State ──── */}
         {!isConnected && connection?.status !== "error" && (
           <div className="space-y-4">
+            {/* Mode switcher */}
+            <div className="flex gap-1 bg-muted/40 p-1 rounded-lg w-fit">
+              <button
+                onClick={() => setMode("oauth")}
+                className={`text-xs px-3 py-1.5 rounded-md transition ${mode === "oauth" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+              >
+                Conectar com Meta (OAuth)
+              </button>
+              <button
+                onClick={() => setMode("manual")}
+                className={`text-xs px-3 py-1.5 rounded-md transition ${mode === "manual" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+              >
+                Inserir credenciais manualmente
+              </button>
+            </div>
+
+            {mode === "manual" && (
+              <div className="border border-border/50 rounded-xl p-5 space-y-4 bg-muted/10">
+                <div className="flex items-start gap-2">
+                  <KeyRound className="h-4 w-4 text-primary mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    Use o <strong>Access Token permanente</strong> e o <strong>WhatsApp Business Account ID</strong> obtidos no
+                    <a href="https://business.facebook.com/wa/manage/home/" target="_blank" rel="noreferrer" className="text-primary underline ml-1">Gerenciador da Meta</a>.
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs">Access Token</Label>
+                  <Input type="password" value={manualToken} onChange={e => setManualToken(e.target.value)} placeholder="EAAB..." className="font-mono text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">WhatsApp Business Account ID (WABA)</Label>
+                  <Input value={manualWaba} onChange={e => setManualWaba(e.target.value)} placeholder="123456789012345" className="font-mono text-xs" />
+                </div>
+
+                {manualNumbers.length === 0 ? (
+                  <Button onClick={handleValidateManual} disabled={validateManualCredentials.isPending} className="w-full">
+                    {validateManualCredentials.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                    Validar credenciais e buscar números
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <Label className="text-xs">Selecione o número</Label>
+                    <div className="space-y-2">
+                      {manualNumbers.map(n => (
+                        <label key={n.id} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition ${selectedNumberId === n.id ? "border-primary bg-primary/5" : "border-border/50 hover:bg-muted/30"} ${n.is_test ? "opacity-50 cursor-not-allowed" : ""}`}>
+                          <input
+                            type="radio"
+                            name="phone"
+                            value={n.id}
+                            checked={selectedNumberId === n.id}
+                            onChange={() => !n.is_test && setSelectedNumberId(n.id)}
+                            disabled={n.is_test}
+                            className="mt-1"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{n.display_phone_number || "—"}</span>
+                              {n.is_test && <Badge variant="destructive" className="text-[10px]">Número de teste</Badge>}
+                              {n.quality_rating && <Badge variant="outline" className="text-[10px]">Qualidade: {n.quality_rating}</Badge>}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{n.verified_name || "Sem nome verificado"}</div>
+                            {n.is_test && (
+                              <div className="text-[10px] text-destructive mt-1">
+                                Números de teste só enviam para destinatários pré-aprovados. Adicione um número real no Gerenciador da Meta.
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleSaveManual} disabled={saveManualConnection.isPending || !selectedNumberId} className="flex-1">
+                        {saveManualConnection.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                        Conectar número selecionado
+                      </Button>
+                      <Button variant="outline" onClick={() => { setManualNumbers([]); setSelectedNumberId(""); }}>
+                        Voltar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === "oauth" && (
+            <>
             {/* Main CTA */}
             <div className="bg-gradient-to-br from-emerald-500/5 via-emerald-500/[0.02] to-transparent border border-emerald-500/10 rounded-xl p-6 text-center space-y-4">
               <div className="mx-auto h-14 w-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
@@ -194,6 +319,8 @@ export function WhatsAppConnectionCard() {
                 )}
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -221,22 +348,41 @@ export function WhatsAppConnectionCard() {
         {isConnected && connection && (
           <div className="space-y-4">
             {/* Connection details */}
-            <div className="grid grid-cols-2 gap-3 text-xs bg-muted/30 rounded-lg p-3">
-              <div className="flex items-center gap-1.5">
-                <Phone className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Número:</span>
-                <span className="font-medium">{connection.phone_number || "—"}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-muted/30 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Número WhatsApp</div>
+                  <div className="font-semibold text-sm">{connection.phone_number || "—"}</div>
+                </div>
               </div>
-              {connection.display_name && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">Nome:</span>
-                  <span className="font-medium">{connection.display_name}</span>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Empresa</div>
+                  <div className="font-semibold text-sm">{connection.display_name || "—"}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Status</div>
+                  <div className="font-semibold text-sm capitalize">{connection.status}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Conectado em</div>
+                  <div className="font-semibold text-sm">{new Date(connection.created_at).toLocaleString("pt-BR")}</div>
+                </div>
+              </div>
+              {connection.business_account_id && (
+                <div className="sm:col-span-2 flex items-center gap-2 pt-2 border-t border-border/30">
+                  <span className="text-[10px] text-muted-foreground uppercase">WABA ID:</span>
+                  <code className="text-[10px] font-mono">{connection.business_account_id}</code>
                 </div>
               )}
-              <div className="col-span-2 flex items-center gap-1.5">
-                <span className="text-muted-foreground">Conectado em:</span>
-                <span>{new Date(connection.created_at).toLocaleString("pt-BR")}</span>
-              </div>
             </div>
 
             {/* Webhook info */}

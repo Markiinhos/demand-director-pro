@@ -188,6 +188,44 @@ export function useWhatsAppConnection() {
     },
   });
 
+  type ManualPhoneNumber = {
+    id: string;
+    display_phone_number?: string;
+    verified_name?: string;
+    quality_rating?: string;
+    code_verification_status?: string;
+    is_test?: boolean;
+  };
+
+  const validateManualCredentials = useMutation({
+    mutationFn: async (input: { accessToken: string; wabaId: string }) => {
+      const result = await invokeEdgeFunction<{ numbers: ManualPhoneNumber[] }>("whatsapp-connect", {
+        action: "manual-validate",
+        accessToken: input.accessToken,
+        wabaId: input.wabaId,
+      });
+      return result.numbers || [];
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const saveManualConnection = useMutation({
+    mutationFn: async (input: { accessToken: string; wabaId: string; phoneNumberId?: string }) => {
+      const result = await invokeEdgeFunction<{ connection: WhatsAppConnection }>("whatsapp-connect", {
+        action: "manual-save",
+        accessToken: input.accessToken,
+        wabaId: input.wabaId,
+        phoneNumberId: input.phoneNumberId,
+      });
+      return result.connection;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp_connection"] });
+      toast.success("WhatsApp Business conectado! 🎉");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   // ── Manual connect — advanced/debug only ──────────────
   const connectManual = useMutation({
     mutationFn: async (input: {
@@ -332,6 +370,8 @@ export function useWhatsAppConnection() {
     refetchMetaConfig: metaConfig.refetch,
     startManualOAuth,
     connectManual,
+    validateManualCredentials,
+    saveManualConnection,
     disconnect,
     reconnect,
     testSend,
