@@ -10,9 +10,29 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const BUCKET = "client-files";
+const PUBLIC_MARKER = `/storage/v1/object/public/${BUCKET}/`;
+const SIGN_MARKER = `/storage/v1/object/sign/${BUCKET}/`;
 
 function admin() {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+}
+
+function extractPath(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath) return null;
+  if (urlOrPath.includes(PUBLIC_MARKER)) return urlOrPath.split(PUBLIC_MARKER)[1].split("?")[0];
+  if (urlOrPath.includes(SIGN_MARKER)) return urlOrPath.split(SIGN_MARKER)[1].split("?")[0];
+  if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) return null;
+  return urlOrPath.replace(/^\/+/, "");
+}
+
+async function signIfStored(urlOrPath: string | null | undefined, expiresIn = 60 * 60 * 24): Promise<string | null> {
+  if (!urlOrPath) return null;
+  const path = extractPath(urlOrPath);
+  if (!path) return urlOrPath;
+  const { data, error } = await admin().storage.from(BUCKET).createSignedUrl(path, expiresIn);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }
 
 function json(body: unknown, status = 200) {
@@ -56,13 +76,20 @@ async function handlePortal(token: string) {
     ? await sb.from("demand_feedback").select("*").in("demand_id", demandIds).order("created_at", { ascending: false })
     : { data: [] };
 
+  const signedVersions = await Promise.all(
+    (versions.data ?? []).map(async (v: any) => ({ ...v, file_url: await signIfStored(v.file_url) })),
+  );
+  const signedContracts = await Promise.all(
+    (contracts.data ?? []).map(async (c: any) => ({ ...c, generated_pdf_url: await signIfStored(c.generated_pdf_url) })),
+  );
+
   return json({
     client: client.data,
     demands: demands.data ?? [],
-    versions: versions.data ?? [],
+    versions: signedVersions,
     feedback: feedback.data ?? [],
     budgets: budgets.data ?? [],
-    contracts: contracts.data ?? [],
+    contracts: signedContracts,
   });
 }
 
