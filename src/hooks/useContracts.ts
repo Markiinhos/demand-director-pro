@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
 import { urlToDataUrl, detectImageFormat } from "@/lib/imageToDataUrl";
+import { getSignedFileUrl } from "@/lib/storage";
 
 function extractPlaceholders(text: string): string[] {
   const set = new Set<string>();
@@ -52,13 +53,12 @@ export function useContractTemplates() {
       const path = `${user.id}/contract-templates/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("client-files").upload(path, file);
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("client-files").getPublicUrl(path);
 
       const { data, error } = await supabase.from("contract_templates").insert({
         user_id: user.id,
         name,
         description: description ?? null,
-        file_url: pub.publicUrl,
+        file_url: path,
         file_name: file.name,
         file_type: ext,
         placeholders,
@@ -111,12 +111,15 @@ export function useContracts() {
       let logoDataUrl: string | null = null;
       if (input.include_logo) {
         const { data: client } = await supabase.from("clients").select("logo_url").eq("id", input.client_id).single();
-        const url = (client as any)?.logo_url as string | undefined;
-        if (url) logoDataUrl = await urlToDataUrl(url);
+        const stored = (client as any)?.logo_url as string | undefined;
+        const signed = stored ? await getSignedFileUrl(stored) : null;
+        if (signed) logoDataUrl = await urlToDataUrl(signed);
       }
 
       // Carregar texto do modelo
-      const fileResp = await fetch(tpl.file_url);
+      const tplUrl = await getSignedFileUrl(tpl.file_url);
+      if (!tplUrl) throw new Error("Não foi possível acessar o modelo");
+      const fileResp = await fetch(tplUrl);
       const buf = await fileResp.arrayBuffer();
       let raw = "";
       if (tpl.file_type === "docx") {
@@ -155,7 +158,6 @@ export function useContracts() {
       const path = `${user.id}/contracts/${Date.now()}-${input.title}.pdf`;
       const { error: upErr } = await supabase.storage.from("client-files").upload(path, pdfBlob, { contentType: "application/pdf" });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("client-files").getPublicUrl(path);
 
       const { data, error } = await supabase.from("contracts").insert({
         user_id: user.id,
@@ -164,7 +166,7 @@ export function useContracts() {
         budget_id: input.budget_id ?? null,
         title: input.title,
         variables: input.variables,
-        generated_pdf_url: pub.publicUrl,
+        generated_pdf_url: path,
         status: "draft",
       }).select().single();
       if (error) throw error;
