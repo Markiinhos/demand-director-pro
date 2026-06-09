@@ -1461,6 +1461,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_profile_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["profile_role"]
+      }
       get_demands_summary: { Args: never; Returns: Json }
       get_financial_summary: { Args: never; Returns: Json }
       get_upcoming_payments: { Args: never; Returns: Json }
