@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Briefcase } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -23,7 +24,9 @@ export default function Auth() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow animate-pulse-soft">
+          <Briefcase className="h-4.5 w-4.5 text-white" />
+        </div>
       </div>
     );
   }
@@ -81,17 +84,31 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.015]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+
+      <motion.div
+        className="w-full max-w-md space-y-8"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
+        {/* Brand */}
+        <div className="text-center space-y-3">
+          <div className="flex justify-center mb-4">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow">
+              <Briefcase className="h-6 w-6 text-white" />
+            </div>
+          </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             DesignOS
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Gestão criativa simplificada
           </p>
         </div>
 
-        <Card className="border-border/50 shadow-lg">
+        <Card className="shadow-premium-lg border-border/50">
           {forgotMode ? (
             <>
               <CardHeader className="space-y-1 pb-4">
@@ -121,7 +138,7 @@ export default function Auth() {
                 <div className="mt-4 text-center text-sm">
                   <button
                     onClick={() => setForgotMode(false)}
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary hover:underline font-medium transition-colors"
                   >
                     Voltar ao login
                   </button>
@@ -174,7 +191,7 @@ export default function Auth() {
                         <button
                           type="button"
                           onClick={() => setForgotMode(true)}
-                          className="text-xs text-primary hover:underline"
+                          className="text-xs text-primary hover:underline transition-colors"
                         >
                           Esqueceu a senha?
                         </button>
@@ -192,7 +209,7 @@ export default function Auth() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -205,13 +222,13 @@ export default function Auth() {
                   </Button>
                 </form>
 
-                <div className="mt-4 text-center text-sm">
+                <div className="mt-6 text-center text-sm">
                   <span className="text-muted-foreground">
                     {isLogin ? 'Não tem conta? ' : 'Já tem conta? '}
                   </span>
                   <button
                     onClick={() => setIsLogin(!isLogin)}
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary hover:underline font-medium transition-colors"
                   >
                     {isLogin ? 'Criar conta' : 'Entrar'}
                   </button>
@@ -220,7 +237,11 @@ export default function Auth() {
             </>
           )}
         </Card>
-      </div>
+
+        <p className="text-center text-xs text-muted-foreground/50">
+          © {new Date().getFullYear()} DesignOS. Todos os direitos reservados.
+        </p>
+      </motion.div>
     </div>
   );
 }

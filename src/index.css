@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,37 +6,39 @@
 
 @layer base {
   :root {
-    --background: 40 20% 98%;
-    --foreground: 220 25% 10%;
+    /* Premium light palette — slightly warm gray background */
+    --background: 220 16% 96%;
+    --foreground: 224 28% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
+    --card-foreground: 224 28% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
+    --popover-foreground: 224 28% 12%;
 
+    /* Indigo primary */
     --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;
-    --secondary-foreground: 220 25% 10%;
+    --secondary-foreground: 224 28% 12%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 243 75% 96%;
-    --accent-foreground: 243 75% 40%;
+    --accent: 243 60% 96%;
+    --accent-foreground: 243 70% 45%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 68% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 71% 45%;
+    --success: 152 60% 42%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --warning-foreground: 38 92% 14%;
 
-    --info: 199 89% 48%;
+    --info: 201 85% 48%;
     --info-foreground: 0 0% 100%;
 
     --border: 220 13% 91%;
@@ -45,49 +47,51 @@
 
     --radius: 0.75rem;
 
-    --sidebar-background: 230 25% 9%;
-    --sidebar-foreground: 220 14% 80%;
+    /* Sidebar — dark premium */
+    --sidebar-background: 228 24% 8%;
+    --sidebar-foreground: 220 14% 72%;
     --sidebar-primary: 243 75% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 230 20% 15%;
+    --sidebar-accent: 228 18% 14%;
     --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 230 15% 18%;
+    --sidebar-border: 228 14% 16%;
     --sidebar-ring: 243 75% 59%;
     --sidebar-muted: 220 10% 46%;
 
+    /* Kanban */
     --kanban-pending: 38 92% 50%;
-    --kanban-progress: 199 89% 48%;
-    --kanban-review: 280 67% 55%;
-    --kanban-done: 142 71% 45%;
+    --kanban-progress: 201 85% 48%;
+    --kanban-review: 270 60% 55%;
+    --kanban-done: 152 60% 42%;
   }
 
   .dark {
-    --background: 230 25% 7%;
+    --background: 228 24% 6%;
     --foreground: 220 14% 96%;
 
-    --card: 230 20% 11%;
+    --card: 228 20% 10%;
     --card-foreground: 220 14% 96%;
 
-    --popover: 230 20% 11%;
+    --popover: 228 20% 10%;
     --popover-foreground: 220 14% 96%;
 
     --primary: 243 75% 64%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 230 15% 18%;
+    --secondary: 228 15% 16%;
     --secondary-foreground: 220 14% 96%;
 
-    --muted: 230 15% 18%;
+    --muted: 228 15% 16%;
     --muted-foreground: 220 10% 55%;
 
-    --accent: 243 40% 18%;
+    --accent: 243 40% 16%;
     --accent-foreground: 243 75% 75%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 230 15% 18%;
-    --input: 230 15% 18%;
+    --border: 228 14% 16%;
+    --input: 228 14% 16%;
     --ring: 243 75% 64%;
   }
 }
@@ -97,30 +101,180 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.011em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Premium scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
   }
 }
 
+/* ─── Utility classes ─── */
 @layer utilities {
-  .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
-  }
-
+  /* Stat card — dashboard cards */
   .stat-card {
-    @apply bg-card border border-border/50 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow;
+    @apply bg-card rounded-xl p-5 border border-border/60
+           shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]
+           hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)]
+           transition-all duration-300 ease-out;
   }
 
+  /* Glass card */
+  .glass-card {
+    @apply bg-card/90 backdrop-blur-sm border border-border/50
+           shadow-[0_1px_3px_0_rgba(0,0,0,0.04)];
+  }
+
+  /* Kanban column */
   .kanban-column {
-    @apply bg-muted/50 rounded-xl p-3 min-w-[280px] max-w-[320px];
+    @apply bg-muted/40 rounded-xl p-3 min-w-[280px] max-w-[320px]
+           border border-border/30;
   }
 
+  /* Kanban card */
   .kanban-card {
-    @apply bg-card rounded-lg p-3 border border-border/50 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing;
+    @apply bg-card rounded-lg p-3.5 border border-border/50
+           shadow-[0_1px_2px_0_rgba(0,0,0,0.03)]
+           hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)]
+           hover:border-border
+           transition-all duration-200
+           cursor-grab active:cursor-grabbing;
   }
 
+  /* Sidebar subtle glow */
   .sidebar-glow {
-    @apply relative after:absolute after:inset-0 after:bg-gradient-to-b after:from-primary/5 after:to-transparent after:pointer-events-none;
+    @apply relative after:absolute after:inset-0
+           after:bg-gradient-to-b after:from-primary/5 after:to-transparent
+           after:pointer-events-none;
+  }
+
+  /* Page header */
+  .page-header {
+    @apply flex flex-wrap items-end justify-between gap-3 mb-6;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-muted-foreground text-sm mt-0.5;
+  }
+
+  /* Content card (for wrapping tables/lists) */
+  .content-card {
+    @apply bg-card border border-border/50 rounded-xl overflow-hidden
+           shadow-[0_1px_3px_0_rgba(0,0,0,0.04)];
+  }
+
+  /* Skeleton shimmer */
+  .skeleton-shimmer {
+    @apply relative overflow-hidden;
+  }
+  .skeleton-shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent, hsl(var(--muted-foreground) / 0.06), transparent);
+    animation: shimmer 1.8s infinite;
+  }
+
+  /* Empty state */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-12 px-6 text-center;
+  }
+  .empty-state-icon {
+    @apply h-14 w-14 mb-4 text-muted-foreground/25;
+  }
+  .empty-state-title {
+    @apply text-lg font-semibold mb-1;
+  }
+  .empty-state-description {
+    @apply text-sm text-muted-foreground max-w-sm mb-4;
+  }
+
+  /* Focus ring */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-ring/50 focus-visible:ring-offset-2
+           focus-visible:ring-offset-background;
   }
 }
+
+/* ─── Animations ─── */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Stagger children animation helper */
+.animate-children > * {
+  animation: fade-up 0.4s ease-out both;
+}
+.animate-children > *:nth-child(1) { animation-delay: 0ms; }
+.animate-children > *:nth-child(2) { animation-delay: 50ms; }
+.animate-children > *:nth-child(3) { animation-delay: 100ms; }
+.animate-children > *:nth-child(4) { animation-delay: 150ms; }
+.animate-children > *:nth-child(5) { animation-delay: 200ms; }
+.animate-children > *:nth-child(6) { animation-delay: 250ms; }
+.animate-children > *:nth-child(7) { animation-delay: 300ms; }
+.animate-children > *:nth-child(8) { animation-delay: 350ms; }

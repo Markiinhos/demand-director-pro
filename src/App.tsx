@@ -27,6 +27,7 @@ import { OnboardingDialog } from "@/components/onboarding/OnboardingDialog";
 import PortalCliente from "./pages/public/PortalCliente";
 import BriefingPublico from "./pages/public/BriefingPublico";
 import PropostaPublica from "./pages/public/PropostaPublica";
+import AssistenteIA from "./pages/AssistenteIA";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const App = () => (
                       <Route path="/contratos" element={<Contratos />} />
                       <Route path="/planos" element={<Planos />} />
                       <Route path="/whatsapp" element={<WhatsApp />} />
+                      <Route path="/assistente" element={<AssistenteIA />} />
                       <Route path="/perfil" element={<Perfil />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
