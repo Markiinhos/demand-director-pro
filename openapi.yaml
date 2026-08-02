@@ -1,0 +1,51 @@
+openapi: 3.1.0
+info:
+  title: Gestor Operacional Demand Director
+  description: API do Agente IA interno para gestão operacional da Agência
+  version: 1.0.0
+servers:
+  - url: https://SEU_PROJETO.supabase.co/functions/v1/chatgpt-actions
+    description: Production Server
+
+paths:
+  /execute:
+    post:
+      summary: Executa ações e consultas autorizadas
+      operationId: executeAction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  description: Nome da ferramenta/ação (ex. get_daily_priorities, list_overdue_demands, create_demand, create_meeting_agenda)
+                payload:
+                  type: object
+                  description: Argumentos necessários para a ação
+      responses:
+        '200':
+          description: Ação executada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    description: Resultado da ação ou dados consultados
+                  status:
+                    type: string
+                    description: Status da ação (executed, pending_approval)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

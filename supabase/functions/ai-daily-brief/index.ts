@@ -64,9 +64,28 @@ serve(async (req) => {
       overdue_demands: overdueDemands?.length || 0,
       upcoming_demands: upcomingDemands?.length || 0,
       overdue_financials: overdueFinancials?.length || 0,
-      overdue_financials_value: overdueFinancials?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0,
+      overdue_financials_value: overdueFinancials?.reduce((sum: number, item: any) => sum + (item.amount || 0), 0) || 0,
       pending_actions: pendingActions?.length || 0
     };
+
+    // 5. Executar rotinas diárias configuráveis (Ex: cobrança dia 10)
+    const { data: routines } = await supabase.from("ai_routines").select("*").eq("is_active", true);
+    if (routines && routines.length > 0) {
+      for (const rtn of routines) {
+        // Lógica simplificada de cron (ex: "dia 10")
+        if (rtn.schedule === String(new Date().getDate())) {
+          // Cria a ação (pending_approval or pending execution) baseada na config da rotina
+          await supabase.from("ai_actions").insert([{
+            user_id: rtn.user_id,
+            tool_name: rtn.routine_type, 
+            arguments: rtn.configuration, // config params
+            status: rtn.requires_approval ? "pending_approval" : "pending",
+            risk_level: "high", // billing is always high/medium risk
+            requires_approval: rtn.requires_approval
+          }]);
+        }
+      }
+    }
 
     // Save history
     await supabase.from("ai_events").insert([{

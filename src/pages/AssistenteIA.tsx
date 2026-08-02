@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AIChat from "@/components/assistant/AIChat";
-import AIDailyBrief from "@/components/assistant/AIDailyBrief";
+import AIOperationalCenter from "@/components/assistant/AIOperationalCenter";
 import AIApprovalQueue from "@/components/assistant/AIApprovalQueue";
 import AIActivityLog from "@/components/assistant/AIActivityLog";
 import AIKnowledgeManager from "@/components/assistant/AIKnowledgeManager";
+import AIRoutinesManager from "@/components/assistant/AIRoutinesManager";
+import AIComplianceManager from "@/components/assistant/AIComplianceManager";
 import AISettingsDialog from "@/components/assistant/AISettingsDialog";
 import { Button } from "@/components/ui/button";
 import { Settings, Sparkles } from "lucide-react";
@@ -29,10 +31,12 @@ const AssistenteIA = () => {
       </div>
 
       <Tabs defaultValue="chat" className="space-y-6">
-        <TabsList className="bg-muted/50 border-border/50">
+        <TabsList className="bg-muted/50 border-border/50 flex-wrap h-auto p-1">
+          <TabsTrigger value="daily">Central Operacional</TabsTrigger>
           <TabsTrigger value="chat">Chat / Interação</TabsTrigger>
-          <TabsTrigger value="daily">Resumo Diário</TabsTrigger>
           <TabsTrigger value="approvals">Aprovações</TabsTrigger>
+          <TabsTrigger value="routines">Rotinas</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
           <TabsTrigger value="knowledge">Base de Conhecimento</TabsTrigger>
           <TabsTrigger value="history">Histórico</TabsTrigger>
         </TabsList>
@@ -44,7 +48,7 @@ const AssistenteIA = () => {
         </TabsContent>
 
         <TabsContent value="daily" className="m-0">
-          <AIDailyBrief />
+          <AIOperationalCenter />
         </TabsContent>
 
         <TabsContent value="approvals" className="m-0">
@@ -53,6 +57,14 @@ const AssistenteIA = () => {
 
         <TabsContent value="knowledge" className="m-0">
           <AIKnowledgeManager />
+        </TabsContent>
+
+        <TabsContent value="routines" className="m-0">
+          <AIRoutinesManager />
+        </TabsContent>
+        
+        <TabsContent value="compliance" className="m-0">
+          <AIComplianceManager />
         </TabsContent>
 
         <TabsContent value="history" className="m-0">
