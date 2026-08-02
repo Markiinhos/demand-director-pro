@@ -2,47 +2,90 @@ openapi: 3.1.0
 info:
   title: Gestor Operacional Demand Director
   description: API do Agente IA interno para gestão operacional da Agência
-  version: 1.0.0
+  version: 1.0.1
 servers:
-  - url: https://SEU_PROJETO.supabase.co/functions/v1/chatgpt-actions
+  - url: https://URL_PROJETO_REAL.supabase.co/functions/v1/chatgpt-actions
     description: Production Server
 
 paths:
-  /execute:
+  /getDailyPriorities:
     post:
-      summary: Executa ações e consultas autorizadas
-      operationId: executeAction
-      security:
-        - bearerAuth: []
+      summary: Retorna resumo e prioridades operacionais do dia
+      operationId: getDailyPriorities
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Sucesso
+
+  /listOverdueDemands:
+    post:
+      summary: Lista todas as demandas com prazo estourado
+      operationId: listOverdueDemands
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Sucesso
+
+  /createDemand:
+    post:
+      summary: Cria uma nova demanda 
+      operationId: createDemand
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - action
+              required: [client_id, title]
               properties:
-                action:
-                  type: string
-                  description: Nome da ferramenta/ação (ex. get_daily_priorities, list_overdue_demands, create_demand, create_meeting_agenda)
-                payload:
-                  type: object
-                  description: Argumentos necessários para a ação
+                client_id: { type: string, format: uuid }
+                title: { type: string }
+                description: { type: string }
+                due_date: { type: string, format: date-time }
       responses:
         '200':
-          description: Ação executada com sucesso
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result:
-                    type: object
-                    description: Resultado da ação ou dados consultados
-                  status:
-                    type: string
-                    description: Status da ação (executed, pending_approval)
+          description: Sucesso (ação pendente criada e aguardando aprovação)
+
+  /prepareCollection:
+    post:
+      summary: Prepara uma cobrança/fatura
+      operationId: prepareCollection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, amount, description]
+              properties:
+                client_id: { type: string, format: uuid }
+                amount: { type: number }
+                description: { type: string }
+      responses:
+        '200':
+          description: Sucesso
+
+  /createMeetingAgenda:
+    post:
+      summary: Cadastra uma reunião no calendário e prepara a pauta
+      operationId: createMeetingAgenda
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, title]
+              properties:
+                client_id: { type: string, format: uuid }
+                title: { type: string }
+                scheduled_at: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Sucesso
 
 components:
   securitySchemes:

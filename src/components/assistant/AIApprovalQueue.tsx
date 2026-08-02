@@ -26,16 +26,17 @@ export default function AIApprovalQueue() {
 
   const mutateStatus = useMutation({
     mutationFn: async ({ id, status, func }: { id: string, status: string, func: string }) => {
-      // Stub execution if Approved (real functionality should call an Edge Function ai-approve-action)
-      const updates: any = { status };
       if (status === 'executed') {
-         updates.executed_at = new Date().toISOString();
-         updates.approved_at = new Date().toISOString();
+         const { data, error } = await supabase.functions.invoke("ai-execute-action", {
+           body: { action_id: id }
+         });
+         if (error) throw error;
+         return data;
       }
       
       const { data, error } = await supabase
         .from("ai_actions")
-        .update(updates)
+        .update({ status: 'rejected' })
         .eq("id", id)
         .select()
         .single();

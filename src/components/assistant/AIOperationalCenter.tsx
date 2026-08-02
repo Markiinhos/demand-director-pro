@@ -30,18 +30,10 @@ export default function AIOperationalCenter() {
   });
 
   const handleApprove = async (id: string, tool: string) => {
-    // This should ideally call an Edge Function for "real" execution. For now, mutates status inline.
-    const { error } = await supabase.from('ai_actions').update({ status: 'executed', executed_at: new Date().toISOString() }).eq('id', id);
-    if (!error) {
-       refetchActions();
-       // Also log event
-       await supabase.from("ai_events").insert([{
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-          event_type: "action_approved",
-          payload: { action_id: id },
-          status: "processed"
-       }]);
-    }
+    const { error } = await supabase.functions.invoke('ai-execute-action', {
+      body: { action_id: id }
+    });
+    if (!error) refetchActions();
   };
 
   const handleReject = async (id: string) => {

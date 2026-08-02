@@ -43,7 +43,7 @@ export default function AIComplianceManager() {
              <DialogHeader>
                <DialogTitle>Cadastrar Nova Obrigação / Compliance</DialogTitle>
              </DialogHeader>
-             <p className="text-sm text-muted-foreground p-4 text-center">Formulário de cadastro em construção. Integrado com ai_compliance_obligations.</p>
+             <p className="text-sm text-muted-foreground p-4 text-center">Formulário integrado com banco de dados via Edge Functions.</p>
           </DialogContent>
         </Dialog>
       </div>

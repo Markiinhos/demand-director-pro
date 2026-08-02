@@ -68,7 +68,7 @@ export default function AIRoutinesManager() {
                  {rou.requires_approval ? (
                     <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-medium">Requer Aprovação Manual</span>
                  ) : (
-                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-medium">Execução Automática</span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-medium">Cron Ativado</span>
                  )}
               </div>
             </CardContent>
