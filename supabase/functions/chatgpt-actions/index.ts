@@ -76,7 +76,7 @@ serve(async (req) => {
     const lowRiskTools = ["get_daily_summary", "list_overdue_demands", "list_upcoming_demands", "search_clients", "get_client_context"];
     
     if (lowRiskTools.includes(action)) {
-       result = await executeAiTool(action, payload, { supabase, user_id: userId });
+       result = await executeAiTool(action, payload, { supabase, user_id: userId, channel: "chatgpt_action", role: "owner" });
     } else {
        const risk = (action === "prepare_collection") ? "high" : "medium";
        const { data, error } = await supabase.from("ai_actions").insert([{
