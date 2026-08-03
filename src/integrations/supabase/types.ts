@@ -18,12 +18,19 @@ export type Database = {
         Row: {
           approved_at: string | null
           arguments: Json
+          channel: string
+          client_id: string | null
+          confirmation_expires_at: string | null
           conversation_id: string | null
           created_at: string
           error_message: string | null
           executed_at: string | null
+          external_conversation_id: string | null
+          external_user_identifier: string | null
           id: string
           idempotency_key: string | null
+          metadata: Json
+          rejected_at: string | null
           requires_approval: boolean
           result: Json | null
           risk_level: string
@@ -35,12 +42,19 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           arguments?: Json
+          channel?: string
+          client_id?: string | null
+          confirmation_expires_at?: string | null
           conversation_id?: string | null
           created_at?: string
           error_message?: string | null
           executed_at?: string | null
+          external_conversation_id?: string | null
+          external_user_identifier?: string | null
           id?: string
           idempotency_key?: string | null
+          metadata?: Json
+          rejected_at?: string | null
           requires_approval?: boolean
           result?: Json | null
           risk_level?: string
@@ -52,12 +66,19 @@ export type Database = {
         Update: {
           approved_at?: string | null
           arguments?: Json
+          channel?: string
+          client_id?: string | null
+          confirmation_expires_at?: string | null
           conversation_id?: string | null
           created_at?: string
           error_message?: string | null
           executed_at?: string | null
+          external_conversation_id?: string | null
+          external_user_identifier?: string | null
           id?: string
           idempotency_key?: string | null
+          metadata?: Json
+          rejected_at?: string | null
           requires_approval?: boolean
           result?: Json | null
           risk_level?: string
@@ -111,24 +132,39 @@ export type Database = {
       }
       ai_conversations: {
         Row: {
+          channel: string
+          client_id: string | null
           created_at: string
+          external_conversation_id: string | null
+          external_user_identifier: string | null
           id: string
+          metadata: Json
           status: string
           title: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          channel?: string
+          client_id?: string | null
           created_at?: string
+          external_conversation_id?: string | null
+          external_user_identifier?: string | null
           id?: string
+          metadata?: Json
           status?: string
           title?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          channel?: string
+          client_id?: string | null
           created_at?: string
+          external_conversation_id?: string | null
+          external_user_identifier?: string | null
           id?: string
+          metadata?: Json
           status?: string
           title?: string | null
           updated_at?: string
@@ -138,30 +174,54 @@ export type Database = {
       }
       ai_events: {
         Row: {
+          action_id: string | null
+          channel: string | null
+          conversation_id: string | null
           created_at: string
+          duration_ms: number | null
           error_message: string | null
           event_type: string
+          external_identifier: string | null
           id: string
+          ip_address: string | null
           payload: Json
+          risk_level: string | null
           status: string
+          tool_name: string | null
           user_id: string | null
         }
         Insert: {
+          action_id?: string | null
+          channel?: string | null
+          conversation_id?: string | null
           created_at?: string
+          duration_ms?: number | null
           error_message?: string | null
           event_type: string
+          external_identifier?: string | null
           id?: string
+          ip_address?: string | null
           payload?: Json
+          risk_level?: string | null
           status?: string
+          tool_name?: string | null
           user_id?: string | null
         }
         Update: {
+          action_id?: string | null
+          channel?: string | null
+          conversation_id?: string | null
           created_at?: string
+          duration_ms?: number | null
           error_message?: string | null
           event_type?: string
+          external_identifier?: string | null
           id?: string
+          ip_address?: string | null
           payload?: Json
+          risk_level?: string | null
           status?: string
+          tool_name?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -209,6 +269,7 @@ export type Database = {
       }
       ai_messages: {
         Row: {
+          channel: string
           content: string
           conversation_id: string
           created_at: string
@@ -218,6 +279,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          channel?: string
           content?: string
           conversation_id: string
           created_at?: string
@@ -227,6 +289,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          channel?: string
           content?: string
           conversation_id?: string
           created_at?: string
@@ -474,6 +537,51 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valid_until?: string | null
+        }
+        Relationships: []
+      }
+      chatgpt_integrations: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          failed_attempts: number
+          id: string
+          is_active: boolean
+          key_hash: string
+          key_prefix: string | null
+          last_used_at: string | null
+          name: string
+          revoked_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          key_hash: string
+          key_prefix?: string | null
+          last_used_at?: string | null
+          name: string
+          revoked_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          key_hash?: string
+          key_prefix?: string | null
+          last_used_at?: string | null
+          name?: string
+          revoked_at?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1118,6 +1226,53 @@ export type Database = {
         }
         Relationships: []
       }
+      meetings: {
+        Row: {
+          agenda: string | null
+          client_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          scheduled_at: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agenda?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scheduled_at?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agenda?: string | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scheduled_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mp_connections: {
         Row: {
           access_token: string
@@ -1610,6 +1765,60 @@ export type Database = {
           },
         ]
       }
+      whatsapp_authorized_numbers: {
+        Row: {
+          access_role: string
+          client_id: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          integration_id: string | null
+          is_active: boolean
+          phone_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_role?: string
+          client_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          integration_id?: string | null
+          is_active?: boolean
+          phone_number: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_role?: string
+          client_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          integration_id?: string | null
+          is_active?: boolean
+          phone_number?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_authorized_numbers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_authorized_numbers_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_connections: {
         Row: {
           access_token_encrypted: string | null
@@ -1658,6 +1867,73 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversations: {
+        Row: {
+          ai_conversation_id: string | null
+          client_id: string | null
+          contact_name: string | null
+          conversation_type: string
+          created_at: string
+          id: string
+          integration_id: string | null
+          last_message_at: string | null
+          phone_number: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_conversation_id?: string | null
+          client_id?: string | null
+          contact_name?: string | null
+          conversation_type?: string
+          created_at?: string
+          id?: string
+          integration_id?: string | null
+          last_message_at?: string | null
+          phone_number: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_conversation_id?: string | null
+          client_id?: string | null
+          contact_name?: string | null
+          conversation_type?: string
+          created_at?: string
+          id?: string
+          integration_id?: string | null
+          last_message_at?: string | null
+          phone_number?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_ai_conversation_id_fkey"
+            columns: ["ai_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_conversations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_logs: {
         Row: {
           created_at: string
@@ -1690,7 +1966,7 @@ export type Database = {
       }
       whatsapp_messages: {
         Row: {
-          client_id: string
+          client_id: string | null
           content: string | null
           conversation_id: string | null
           created_at: string
@@ -1700,6 +1976,8 @@ export type Database = {
           media_url: string | null
           message_type: string
           metadata: Json | null
+          provider: string
+          provider_message_id: string | null
           related_entity_id: string | null
           related_entity_type: string | null
           status: string
@@ -1708,9 +1986,10 @@ export type Database = {
           user_id: string
           wa_message_id: string | null
           whatsapp_connection_id: string | null
+          whatsapp_conversation_id: string | null
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           content?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1720,6 +1999,8 @@ export type Database = {
           media_url?: string | null
           message_type: string
           metadata?: Json | null
+          provider?: string
+          provider_message_id?: string | null
           related_entity_id?: string | null
           related_entity_type?: string | null
           status?: string
@@ -1728,9 +2009,10 @@ export type Database = {
           user_id: string
           wa_message_id?: string | null
           whatsapp_connection_id?: string | null
+          whatsapp_conversation_id?: string | null
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           content?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -1740,6 +2022,8 @@ export type Database = {
           media_url?: string | null
           message_type?: string
           metadata?: Json | null
+          provider?: string
+          provider_message_id?: string | null
           related_entity_id?: string | null
           related_entity_type?: string | null
           status?: string
@@ -1748,8 +2032,17 @@ export type Database = {
           user_id?: string
           wa_message_id?: string | null
           whatsapp_connection_id?: string | null
+          whatsapp_conversation_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_whatsapp_conversation_id_fkey"
+            columns: ["whatsapp_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_templates: {
         Row: {
