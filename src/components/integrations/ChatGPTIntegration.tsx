@@ -29,35 +29,22 @@ export function ChatGPTIntegration() {
   }, []);
 
   async function generateKey() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
     
-    // Simulating token generation (in production, a secure edge function should do this to return the raw token once)
-    // For this prototype/MVP we generate an UUID as token, save it (plain/hashed), and show it once.
-    // If we only store the hash in production, we do standard SHA-256.
-    const rawKey = `sk-saas-${crypto.randomUUID()}`;
-    
-    // Hash before saving
-    const encoder = new TextEncoder();
-    const data = encoder.encode(rawKey);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const { error } = await supabase.from("chatgpt_integrations").insert({
-       user_id: user.id,
-       name: `GPT Actions ${new Date().toLocaleDateString()}`,
-       key_hash: keyHash,
-       key_prefix: rawKey.substring(0, 12),
-       is_active: true
+    const { data, error } = await supabase.functions.invoke("chatgpt-keys", {
+      method: "POST",
+      body: { name: `GPT Actions ${new Date().toLocaleDateString("pt-BR")}` }
     });
 
-    if (error) {
+    if (error || !data?.success) {
        toast.error("Erro ao gerar chave.");
+       setLoading(false);
        return;
     }
 
-    setGeneratedKey(rawKey);
+    setGeneratedKey(data.raw_key);
     setShowKeyDialog(true);
     loadIntegrations();
   }

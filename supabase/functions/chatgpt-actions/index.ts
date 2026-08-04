@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { executeAiTool } from "../_shared/ai-tools.ts";
+import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,29 +17,55 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
 
     if (!authHeader) throw new Error("Missing Authorization header.");
+    if (!authHeader.startsWith("Bearer ")) {
+       throw new Error("Authorization header must start with Bearer");
+    }
 
-    const token = authHeader.replace("Bearer ", "").trim();
-    // In production we would hash the token here, simulating key hash lookup:
-    const keyHash = token; 
+    const token = authHeader.substring(7).trim();
+    
+    // Hash the token
+    const encoder = new TextEncoder();
+    const data = encoder.encode(token);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const keyHash = encodeHex(new Uint8Array(hashBuffer)); 
 
     // Create service client to bypass RLS until we find the user
     let supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: integration, error: intError } = await supabase
        .from("chatgpt_integrations")
-       .select("user_id, is_active, expires_at")
+       .select("user_id, is_active, revoked_at, expires_at")
        .eq("key_hash", keyHash)
-       .single();
+       .maybeSingle();
 
-    if (intError || !integration || !integration.is_active) {
-       throw new Error("Chave revogada, inválida ou inativa.");
+    const url = new URL(req.url);
+    const actionPath = url.pathname.split('/').pop() || "";
+
+    // Temporarily dump sanitized diagnostics for debugging
+    console.log(JSON.stringify({
+       len: token.length,
+       prefix_received: token.substring(0, 12),
+       hash_first_12: keyHash.substring(0, 12),
+       found: !!integration,
+       is_active: integration?.is_active,
+       revoked_presence: !!integration?.revoked_at,
+       expires_at: integration?.expires_at,
+       operationId: actionPath
+    }));
+
+    if (intError || !integration) {
+       return new Response(JSON.stringify({ error: "integration_not_found" }), { status: 401, headers: corsHeaders });
     }
-
+    if (!integration.is_active) {
+       return new Response(JSON.stringify({ error: "integration_inactive" }), { status: 401, headers: corsHeaders });
+    }
+    if (integration.revoked_at) {
+       return new Response(JSON.stringify({ error: "integration_revoked" }), { status: 401, headers: corsHeaders });
+    }
     if (integration.expires_at && new Date(integration.expires_at) < new Date()) {
-       throw new Error("Chave expirada.");
+       return new Response(JSON.stringify({ error: "integration_expired" }), { status: 401, headers: corsHeaders });
     }
 
-    // Now recreate client with the proper authorization for RLS context
     // A clean way in edge functions when we don't have JWT but have user_id, 
     // is to invoke the rest of the functions using service role, BUT explicitly filtering by user_id
     // to simulate RLS, since chatgpt-actions doesn't use standard auth.getUser().
@@ -47,9 +74,7 @@ serve(async (req) => {
     // Update last_used
     await supabase.from("chatgpt_integrations").update({ last_used_at: new Date().toISOString() }).eq("user_id", userId).eq("key_hash", keyHash);
 
-    const url = new URL(req.url);
-    const actionPath = url.pathname.split('/').pop() || "";
-    
+
     // Convert camelCase OpenAPI to snake_case tools
     const actionMap: Record<string, string> = {
         getDailyPriorities: "get_daily_priorities",
