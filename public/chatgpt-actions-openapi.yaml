@@ -4,48 +4,45 @@ info:
   description: Operações financeiras e operacionais para agências multicanal via GPT.
   version: "1.0.0"
 servers:
-  - url: https://[YOUR_SUPABASE_PROJECT].supabase.co/functions/v1/chatgpt-actions
+  - url: https://lwabrwtqwveqrkwegikg.supabase.co/functions/v1/chatgpt-actions
     description: Production Edge Function
 paths:
   /getDailyPriorities:
     post:
       operationId: getDailyPriorities
       summary: Retorna prioridades pendentes, divididas em hoje e atrasadas.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /getWeeklyPriorities:
     post:
       operationId: getWeeklyPriorities
       summary: Retorna prioridades dos próximos 7 dias.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listOverdueDemands:
     post:
       operationId: listOverdueDemands
       summary: Lista apenas demandas atrasadas.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listUpcomingDemands:
     post:
       operationId: listUpcomingDemands
@@ -60,9 +57,17 @@ paths:
                 days:
                   type: integer
                   description: Quantos dias considerar para o vencimento.
+              required:
+                - days
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /searchClients:
     post:
       operationId: searchClients
@@ -76,9 +81,18 @@ paths:
               properties:
                 query:
                   type: string
+                  description: Nome do cliente para buscar.
+              required:
+                - query
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /getClientContext:
     post:
       operationId: getClientContext
@@ -92,89 +106,91 @@ paths:
               properties:
                 client_id:
                   type: string
+                  format: uuid
+                  description: UUID do cliente.
               required:
                 - client_id
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listOverduePayments:
     post:
       operationId: listOverduePayments
       summary: Lista pagamentos vencidos que não foram recebidos.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listDueCollections:
     post:
       operationId: listDueCollections
       summary: Lista cobranças a vencer.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listExpiringContracts:
     post:
       operationId: listExpiringContracts
       summary: Lista contratos expirando (na mesa, não assinados).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listUpcomingMeetings:
     post:
       operationId: listUpcomingMeetings
       summary: Lista reuniões agendadas para os próximos dias.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /getAgencyMetrics:
     post:
       operationId: getAgencyMetrics
       summary: Retorna métricas gerais de recebimento, clientes e demandas em andamento.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /listPendingActions:
     post:
       operationId: listPendingActions
       summary: Lista as ações geradas em canais (whatsapp ou via actions) pendentes de aprovação pelo admin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /createDemand:
     post:
       operationId: createDemand
@@ -188,19 +204,31 @@ paths:
               properties:
                 client_id:
                   type: string
+                  format: uuid
+                  description: UUID do cliente.
                 title:
                   type: string
+                  description: Título da demanda.
                 due_date:
                   type: string
+                  format: date
+                  description: Data de vencimento no formato YYYY-MM-DD.
                 description:
                   type: string
+                  description: Detalhes da demanda.
               required:
                 - client_id
                 - title
                 - due_date
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /rescheduleDemand:
     post:
       operationId: rescheduleDemand
@@ -214,14 +242,24 @@ paths:
               properties:
                 demand_id:
                   type: string
+                  format: uuid
+                  description: UUID da demanda.
                 due_date:
                   type: string
+                  format: date
+                  description: Nova data de vencimento (YYYY-MM-DD).
               required:
                 - demand_id
                 - due_date
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /prepareCollection:
     post:
       operationId: prepareCollection
@@ -235,19 +273,31 @@ paths:
               properties:
                 client_id:
                   type: string
+                  format: uuid
+                  description: UUID do cliente.
                 amount:
                   type: number
+                  description: Valor da cobrança.
                 description:
                   type: string
+                  description: Descrição da cobrança.
                 due_date:
                   type: string
+                  format: date
+                  description: Data de vencimento da cobrança (YYYY-MM-DD).
               required:
                 - client_id
                 - amount
                 - description
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /prepareContract:
     post:
       operationId: prepareContract
@@ -261,14 +311,23 @@ paths:
               properties:
                 client_id:
                   type: string
+                  format: uuid
+                  description: UUID do cliente.
                 title:
                   type: string
+                  description: Título do contrato.
               required:
                 - client_id
                 - title
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
   /createMeetingAgenda:
     post:
       operationId: createMeetingAgenda
@@ -282,18 +341,29 @@ paths:
               properties:
                 title:
                   type: string
+                  description: Título ou assunto da reunião.
                 client_id:
                   type: string
+                  format: uuid
+                  description: UUID do cliente participante.
                 scheduled_at:
                   type: string
+                  format: date-time
+                  description: Data e hora da reunião.
               required:
                 - title
                 - scheduled_at
+              additionalProperties: false
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
 
 components:
+  schemas: {}
   securitySchemes:
     bearerAuth:
       type: http
