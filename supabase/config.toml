@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+[functions.chatgpt-actions]
+verify_jwt = false
+
+[functions.chatgpt-keys]
+verify_jwt = true

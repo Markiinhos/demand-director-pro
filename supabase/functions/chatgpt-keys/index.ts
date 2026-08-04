@@ -1,11 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Vanilla hex encoder
+function bufferToHex(buffer: ArrayBuffer | Uint8Array) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -17,17 +24,15 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header");
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const token = authHeader.replace("Bearer ", "").trim();
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) throw new Error("Não autenticado");
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) throw new Error("Não autenticado, JWT inválido.");
 
     const { method } = req;
     
     if (method === "POST") {
-       // Generation
        let body = {};
        try { body = await req.json(); } catch(e) {}
        
@@ -36,16 +41,16 @@ serve(async (req) => {
        // Generate key: 32 random bytes
        const rawBytes = new Uint8Array(32);
        crypto.getRandomValues(rawBytes);
-       const randomHex = encodeHex(rawBytes);
+       const randomHex = bufferToHex(rawBytes);
        
-       const rawKey = `sk-saas-${randomHex}`; // This represents the plain string we show once to the user
+       const rawKey = `sk-saas-${randomHex}`;
        const keyPrefix = rawKey.substring(0, 15);
        
        // Calculate SHA-256
        const encoder = new TextEncoder();
        const data = encoder.encode(rawKey);
        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-       const keyHash = encodeHex(new Uint8Array(hashBuffer));
+       const keyHash = bufferToHex(hashBuffer);
        
        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
        const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -59,13 +64,6 @@ serve(async (req) => {
        }).select().single();
 
        if (insertError) throw insertError;
-
-       // Verify hash internally
-       const hashBufferRe = await crypto.subtle.digest('SHA-256', encoder.encode(rawKey));
-       const keyHashRe = encodeHex(new Uint8Array(hashBufferRe));
-       if (keyHash !== keyHashRe) {
-         throw new Error("Erro na integridade do hash gerado");
-       }
 
        return new Response(JSON.stringify({ 
           success: true, 

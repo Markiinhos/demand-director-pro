@@ -1,7 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { executeAiTool } from "../_shared/ai-tools.ts";
-import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
+
+function bufferToHex(buffer: ArrayBuffer | Uint8Array) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +33,7 @@ serve(async (req) => {
     const encoder = new TextEncoder();
     const data = encoder.encode(token);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const keyHash = encodeHex(new Uint8Array(hashBuffer)); 
+    const keyHash = bufferToHex(hashBuffer); 
 
     // Create service client to bypass RLS until we find the user
     let supabase = createClient(supabaseUrl, supabaseServiceKey);

@@ -38,8 +38,14 @@ export function ChatGPTIntegration() {
       body: { name: `GPT Actions ${new Date().toLocaleDateString("pt-BR")}` }
     });
 
-    if (error || !data?.success) {
-       toast.error("Erro ao gerar chave.");
+    if (error) {
+       toast.error(`Erro de comunicação: ${error.message}`);
+       setLoading(false);
+       return;
+    }
+    
+    if (!data?.success) {
+       toast.error(`Erro do servidor: ${data?.error || "Desconhecido"}`);
        setLoading(false);
        return;
     }
