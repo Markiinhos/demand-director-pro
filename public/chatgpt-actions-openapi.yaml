@@ -13,11 +13,29 @@ paths:
       summary: Retorna prioridades pendentes, divididas em hoje e atrasadas.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /getWeeklyPriorities:
     post:
@@ -25,11 +43,29 @@ paths:
       summary: Retorna prioridades dos próximos 7 dias.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listOverdueDemands:
     post:
@@ -37,11 +73,29 @@ paths:
       summary: Lista apenas demandas atrasadas.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listUpcomingDemands:
     post:
@@ -62,11 +116,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /searchClients:
     post:
@@ -87,11 +159,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /getClientContext:
     post:
@@ -113,11 +203,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listOverduePayments:
     post:
@@ -125,11 +233,29 @@ paths:
       summary: Lista pagamentos vencidos que não foram recebidos.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listDueCollections:
     post:
@@ -137,11 +263,29 @@ paths:
       summary: Lista cobranças a vencer.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listExpiringContracts:
     post:
@@ -149,11 +293,29 @@ paths:
       summary: Lista contratos expirando (na mesa, não assinados).
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listUpcomingMeetings:
     post:
@@ -161,11 +323,29 @@ paths:
       summary: Lista reuniões agendadas para os próximos dias.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /getAgencyMetrics:
     post:
@@ -173,11 +353,29 @@ paths:
       summary: Retorna métricas gerais de recebimento, clientes e demandas em andamento.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /listPendingActions:
     post:
@@ -185,11 +383,29 @@ paths:
       summary: Lista as ações geradas em canais (whatsapp ou via actions) pendentes de aprovação pelo admin.
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /createDemand:
     post:
@@ -223,11 +439,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /rescheduleDemand:
     post:
@@ -254,11 +488,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /prepareCollection:
     post:
@@ -292,11 +544,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /prepareContract:
     post:
@@ -322,11 +592,29 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /createMeetingAgenda:
     post:
@@ -356,14 +644,68 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: OK
+          description: Sucesso
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
-  schemas: {}
+  schemas:
+    ActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        operation:
+          type: string
+        message:
+          type: string
+        data: {}
+        requires_approval:
+          type: boolean
+        action_id:
+          type: string
+        error:
+          type: string
+      required:
+        - success
+      additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - success
+        - error
+      additionalProperties: false
+
   securitySchemes:
     bearerAuth:
       type: http
