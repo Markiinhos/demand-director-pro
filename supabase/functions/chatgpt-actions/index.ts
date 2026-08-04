@@ -52,13 +52,22 @@ serve(async (req) => {
     
     // Convert camelCase OpenAPI to snake_case tools
     const actionMap: Record<string, string> = {
-        getDailyPriorities: "get_daily_summary",
+        getDailyPriorities: "get_daily_priorities",
+        getWeeklyPriorities: "get_weekly_priorities",
         listOverdueDemands: "list_overdue_demands",
         listUpcomingDemands: "list_upcoming_demands",
         searchClients: "search_clients",
         getClientContext: "get_client_context",
+        listOverduePayments: "list_overdue_payments",
+        listDueCollections: "list_due_collections",
+        listExpiringContracts: "list_expiring_contracts",
+        listUpcomingMeetings: "list_upcoming_meetings",
+        getAgencyMetrics: "get_agency_metrics",
+        listPendingActions: "list_pending_ai_actions",
         createDemand: "create_demand",
+        rescheduleDemand: "reschedule_demand",
         prepareCollection: "prepare_collection",
+        prepareContract: "prepare_contract",
         createMeetingAgenda: "create_meeting_agenda"
     };
 
@@ -73,7 +82,12 @@ serve(async (req) => {
     let result = null;
     let executionStatus = "executed";
 
-    const lowRiskTools = ["get_daily_summary", "list_overdue_demands", "list_upcoming_demands", "search_clients", "get_client_context"];
+    const lowRiskTools = [
+        "get_daily_priorities", "get_weekly_priorities", "list_overdue_demands", 
+        "list_upcoming_demands", "search_clients", "get_client_context", "list_overdue_payments",
+        "list_due_collections", "list_expiring_contracts", "list_upcoming_meetings",
+        "get_agency_metrics", "list_pending_ai_actions"
+    ];
     
     if (lowRiskTools.includes(action)) {
        result = await executeAiTool(action, payload, { supabase, user_id: userId, channel: "chatgpt_action", role: "owner" });

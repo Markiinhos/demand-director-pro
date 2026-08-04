@@ -60,14 +60,13 @@ class UazapiProvider implements WhatsAppProvider {
   constructor(private baseUrl: string, private token: string) {}
 
   async sendText(to: string, body: string): Promise<ProviderResult> {
-    const url = `${this.baseUrl.replace(/\/+$/, "")}/send/text`;
-    const res = await fetch(url, {
+    const res = await fetch(this.baseUrl, {
       method: "POST",
-      headers: { token: this.token, "Content-Type": "application/json" },
+      headers: { "apikey": this.token, "Content-Type": "application/json" },
       body: JSON.stringify({ number: normalizePhone(to), text: body }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || data?.message || "Erro na API UAZAPI");
+    if (!res.ok) throw new Error(data?.error || data?.message || "Erro na API UAZAPI/Evolution");
     return { provider: this.name, wa_message_id: data?.id || data?.messageid || data?.key?.id || null, raw: data };
   }
 }
@@ -91,10 +90,13 @@ export async function resolveProvider(
   const kind = (connection.provider || "meta").toLowerCase();
 
   if (kind === "uazapi") {
-    const baseUrl = connection.metadata?.instance_url || Deno.env.get("UAZAPI_BASE_URL") || "";
+    const baseUrl = connection.api_url || connection.metadata?.instance_url || Deno.env.get("UAZAPI_BASE_URL") || "";
     const token = connection.access_token_encrypted || Deno.env.get("UAZAPI_TOKEN") || "";
     if (!baseUrl || !token) throw new Error("Conexão UAZAPI incompleta (URL da instância ou token ausente).");
-    return { provider: new UazapiProvider(baseUrl, token), connection };
+    // Depending on UAZAPI / Evolution configuration, the URL might need the instance name
+    // Assuming baseUrl is http://api.com and UAZAPI requires /message/sendText/instanceName
+    const finalUrl = connection.instance_name ? `${baseUrl.replace(/\/+$/, "")}/message/sendText/${connection.instance_name}` : baseUrl;
+    return { provider: new UazapiProvider(finalUrl, token), connection };
   }
 
   if (!connection.phone_number_id || !connection.access_token_encrypted) {

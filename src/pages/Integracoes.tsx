@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Loader2, CheckCircle2, AlertCircle, MessageSquare, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { ChatGPTIntegration } from "@/components/integrations/ChatGPTIntegration";
 
 export default function Integracoes() {
   const { status, connect, disconnect } = useMpConnection();
@@ -119,6 +120,9 @@ export default function Integracoes() {
           </div>
         )}
       </div>
+
+      {/* ChatGPT Actions */}
+      <ChatGPTIntegration />
     </div>
   );
 }

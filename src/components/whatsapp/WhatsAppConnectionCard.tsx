@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useWhatsAppConnection } from "@/hooks/useWhatsAppConnection";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,9 +25,12 @@ export function WhatsAppConnectionCard() {
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"oauth" | "manual">("oauth");
+  const [mode, setMode] = useState<"oauth" | "manual" | "uazapi">("oauth");
   const [manualToken, setManualToken] = useState("");
   const [manualWaba, setManualWaba] = useState("");
+  const [uazapiUrl, setUazapiUrl] = useState("");
+  const [uazapiToken, setUazapiToken] = useState("");
+  const [uazapiInstance, setUazapiInstance] = useState("");
   const [manualNumbers, setManualNumbers] = useState<Awaited<ReturnType<typeof validateManualCredentials.mutateAsync>>>([]);
   const [selectedNumberId, setSelectedNumberId] = useState<string>("");
 
@@ -115,6 +119,30 @@ export function WhatsAppConnectionCard() {
     } catch (_) { /* toast handled */ }
   };
 
+  const handleSaveUazapi = async () => {
+    if (!uazapiUrl || !uazapiToken || !uazapiInstance) return toast.error("Preencha todos os campos");
+    setIsConnecting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const { error } = await supabase.from("whatsapp_connections").upsert({
+         user_id: user.id,
+         provider: "uazapi",
+         api_url: uazapiUrl.trim(),
+         access_token_encrypted: uazapiToken.trim(),
+         instance_name: uazapiInstance.trim(),
+         status: "connected",
+      } as any, { onConflict: "user_id,phone_number_id" });
+      if (error) throw error;
+      toast.success("Servidor UAZAPI conectado com sucesso.");
+      setMode("oauth");
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* ════ Main Connection Card ════ */}
@@ -158,6 +186,12 @@ export function WhatsAppConnectionCard() {
                 className={`text-xs px-3 py-1.5 rounded-md transition ${mode === "manual" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
               >
                 Inserir credenciais manualmente
+              </button>
+              <button
+                onClick={() => setMode("uazapi")}
+                className={`text-xs px-3 py-1.5 rounded-md transition ${mode === "uazapi" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+              >
+                Servidor Próprio (UAZAPI)
               </button>
             </div>
 
@@ -227,6 +261,29 @@ export function WhatsAppConnectionCard() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {mode === "uazapi" && (
+              <div className="border border-border/50 rounded-xl p-5 space-y-4 bg-muted/10">
+                <div className="text-xs text-muted-foreground whitespace-pre-line">
+                  Para utilizar seu servidor <strong>UAZAPI / Evolution API</strong>, preencha a URL base da API, a chave global/instância e o nome exato da instância.
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">URL da API (ex: https://api.seudominio.com)</Label>
+                  <Input value={uazapiUrl} onChange={e => setUazapiUrl(e.target.value)} placeholder="https://..." className="font-mono text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Global API Key ou Token</Label>
+                  <Input type="password" value={uazapiToken} onChange={e => setUazapiToken(e.target.value)} className="font-mono text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Nome da Instância</Label>
+                  <Input value={uazapiInstance} onChange={e => setUazapiInstance(e.target.value)} placeholder="minha-instancia" className="font-mono text-xs" />
+                </div>
+                <Button onClick={handleSaveUazapi} disabled={isConnecting} className="w-full">
+                   {isConnecting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} Connectar UAZAPI
+                </Button>
               </div>
             )}
 
@@ -377,10 +434,23 @@ export function WhatsAppConnectionCard() {
                   <div className="font-semibold text-sm">{new Date(connection.created_at).toLocaleString("pt-BR")}</div>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase">Provedor</div>
+                  <div className="font-semibold text-sm capitalize">{connection.provider || "meta"}</div>
+                </div>
+              </div>
               {connection.business_account_id && (
                 <div className="sm:col-span-2 flex items-center gap-2 pt-2 border-t border-border/30">
                   <span className="text-[10px] text-muted-foreground uppercase">WABA ID:</span>
                   <code className="text-[10px] font-mono">{connection.business_account_id}</code>
+                </div>
+              )}
+              {(connection as any).instance_name && (
+                <div className="sm:col-span-2 flex items-center gap-2 pt-2 border-t border-border/30">
+                  <span className="text-[10px] text-muted-foreground uppercase">Instância:</span>
+                  <code className="text-[10px] font-mono">{(connection as any).instance_name}</code>
                 </div>
               )}
             </div>
