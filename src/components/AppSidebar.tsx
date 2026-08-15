@@ -1,9 +1,10 @@
 import {
   LayoutDashboard, ListTodo, Users, DollarSign, FileText, Briefcase, LogOut,
   Calculator, CalendarDays, Clock, CreditCard, Plug, FileSignature,
-  ClipboardList, Crown, MessageCircle, UserCog, Bot
+  ClipboardList, Crown, MessageCircle, UserCog, Bot, Shield
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsSuperAdmin } from "@/hooks/useAdmin";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -55,6 +56,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { signOut } = useAuth();
+  const { data: isSuperAdmin } = useIsSuperAdmin();
 
   const renderNavGroup = (items: typeof mainNavItems, label?: string) => (
     <SidebarGroup>
@@ -118,6 +120,15 @@ export function AppSidebar() {
         {renderNavGroup(integrationNavItems, "Integrações")}
         {!collapsed && <div className="mx-4 my-1 h-px bg-sidebar-border/50" />}
         {renderNavGroup(accountNavItems, "Conta")}
+        {isSuperAdmin && (
+          <>
+            {!collapsed && <div className="mx-4 my-1 h-px bg-sidebar-border/50" />}
+            {renderNavGroup(
+              [{ title: "Gestão de contas", url: "/admin", icon: Shield }],
+              "Administração"
+            )}
+          </>
+        )}
 
         {/* Logout */}
         <SidebarFooter className="mt-auto">
