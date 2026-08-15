@@ -23,6 +23,7 @@ import Contratos from "./pages/Contratos";
 import Planos from "./pages/Planos";
 import WhatsApp from "./pages/WhatsApp";
 import Perfil from "./pages/Perfil";
+import Admin from "./pages/Admin";
 import { OnboardingDialog } from "@/components/onboarding/OnboardingDialog";
 import PortalCliente from "./pages/public/PortalCliente";
 import BriefingPublico from "./pages/public/BriefingPublico";
@@ -67,6 +68,7 @@ const App = () => (
                       <Route path="/whatsapp" element={<WhatsApp />} />
                       <Route path="/assistente" element={<AssistenteIA />} />
                       <Route path="/perfil" element={<Perfil />} />
+                      <Route path="/admin" element={<Admin />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <OnboardingDialog />

@@ -1715,6 +1715,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_subscriptions: {
         Row: {
           canceled_at: string | null
@@ -2098,8 +2119,17 @@ export type Database = {
       get_demands_summary: { Args: never; Returns: Json }
       get_financial_summary: { Args: never; Returns: Json }
       get_upcoming_payments: { Args: never; Returns: Json }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
+      app_role: "super_admin"
       briefing_status: "draft" | "sent" | "answered" | "archived"
       budget_status: "rascunho" | "enviado" | "aprovado" | "recusado" | "aceito"
       client_status: "lead" | "ativo" | "inativo"
@@ -2273,6 +2303,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["super_admin"],
       briefing_status: ["draft", "sent", "answered", "archived"],
       budget_status: ["rascunho", "enviado", "aprovado", "recusado", "aceito"],
       client_status: ["lead", "ativo", "inativo"],
