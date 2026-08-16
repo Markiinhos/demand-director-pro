@@ -14,6 +14,9 @@ import {
   type PaymentsBackendStatus,
 } from "@/lib/payments/config";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://lwabrwtqwveqrkwegikg.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3YWJyd3Rxd3ZlcXJrd2VnaWtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2OTYyNzMsImV4cCI6MjA5MTI3MjI3M30.QxPcO--ZyR2bj55Le5Z5gWv1L9RFf0ybtda1pvdeqzo";
+
 class PaymentsRequestError extends Error {
   status?: string | null;
   statusDetail?: string | null;
@@ -60,14 +63,14 @@ function buildPaymentsError(data: unknown, fallbackMessage: string, httpStatus: 
 async function invokePayments(path: string, method: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const url = `https://${projectId}.supabase.co/functions/v1/payments/${path}`;
+  const cleanPath = path ? `${path}` : "";
+  const url = `${SUPABASE_URL}/functions/v1/payments/${cleanPath}`;
   const res = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      apikey: SUPABASE_ANON_KEY,
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -107,8 +110,6 @@ export function usePayments() {
     queryKey: ["payment_charges"],
     queryFn: () => invokePayments("", "GET") as Promise<PaymentCharge[]>,
     enabled: !!user,
-    // Enquanto houver cobranças aguardando pagamento, refaz a query para refletir
-    // confirmações vindas pelo webhook do Mercado Pago.
     refetchInterval: (q) => {
       const data = q.state.data as PaymentCharge[] | undefined;
       const hasPending = data?.some((c) =>
@@ -119,8 +120,6 @@ export function usePayments() {
     refetchOnWindowFocus: true,
   });
 
-  // Quando uma cobrança vira "approved", invalida o financeiro/dashboard
-  // para que receita, lucro e receitas recentes recalculem.
   const lastApprovedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const charges = query.data ?? [];

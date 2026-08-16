@@ -5,18 +5,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { PaymentsBackendStatus } from "@/lib/payments/config";
 
-async function call(path: string, method: "GET" | "POST") {
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://lwabrwtqwveqrkwegikg.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3YWJyd3Rxd3ZlcXJrd2VnaWtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2OTYyNzMsImV4cCI6MjA5MTI3MjI3M30.QxPcO--ZyR2bj55Le5Z5gWv1L9RFf0ybtda1pvdeqzo";
+
+async function call(path: string, method: "GET" | "POST", body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const url = `https://${projectId}.supabase.co/functions/v1/payments/${path}`;
+  const cleanPath = path ? `${path}` : "";
+  const url = `${SUPABASE_URL}/functions/v1/payments/${cleanPath}`;
   const res = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      apikey: SUPABASE_ANON_KEY,
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
   let data: unknown = null;
@@ -24,7 +28,9 @@ async function call(path: string, method: "GET" | "POST") {
   if (!res.ok) {
     const msg = (data && typeof data === "object" && "message" in (data as Record<string, unknown>))
       ? String((data as Record<string, unknown>).message)
-      : "Erro na requisição";
+      : (data && typeof data === "object" && "error" in (data as Record<string, unknown>))
+        ? String((data as Record<string, unknown>).error)
+        : "Erro na requisição";
     throw new Error(msg);
   }
   return data;
@@ -46,7 +52,7 @@ export function useMpConnection() {
     function onMessage(e: MessageEvent) {
       const d = e.data as { type?: string; status?: string } | null;
       if (d?.type === "mp-oauth") {
-        if (d.status === "success") toast.success("Mercado Pago conectado");
+        if (d.status === "success") toast.success("Mercado Pago conectado com sucesso!");
         else toast.error("Falha ao conectar Mercado Pago");
         qc.invalidateQueries({ queryKey: ["payments_config_status"] });
       }
@@ -64,6 +70,17 @@ export function useMpConnection() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const connectWithToken = useMutation({
+    mutationFn: async (accessToken: string) => {
+      return call("manual-connect", "POST", { access_token: accessToken.trim() });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments_config_status"] });
+      toast.success("Mercado Pago conectado com sucesso via Access Token!");
+    },
+    onError: (e: Error) => toast.error("Erro ao conectar: " + e.message),
+  });
+
   const disconnect = useMutation({
     mutationFn: () => call("disconnect", "POST"),
     onSuccess: () => {
@@ -73,5 +90,5 @@ export function useMpConnection() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  return { status, connect, disconnect };
+  return { status, connect, connectWithToken, disconnect };
 }

@@ -1123,6 +1123,39 @@ async function oauthCallback(req: Request): Promise<Response> {
   }
 }
 
+async function manualConnect(req: Request): Promise<Response> {
+  const { userId } = await getAuthenticatedUser(req);
+  const body = await parseBody(req);
+  const accessToken = safeTrim(body.access_token);
+  if (!accessToken) throw new HttpError(400, "Informe o Access Token do Mercado Pago.");
+
+  const meRes = await fetch("https://api.mercadopago.com/users/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!meRes.ok) {
+    const errJson = await meRes.json().catch(() => ({}));
+    throw new HttpError(400, `Access Token do Mercado Pago inválido: ${errJson.message || meRes.statusText}`);
+  }
+
+  const meData = await meRes.json();
+  const mpUserId = String(meData.id || "");
+  const isLive = accessToken.startsWith("APP_USR-");
+
+  const service = getServiceClient();
+  const { error } = await service.from("mp_connections").upsert({
+    user_id: userId,
+    mp_user_id: mpUserId,
+    access_token: accessToken,
+    live_mode: isLive,
+    connected_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
+
+  if (error) throw new HttpError(500, `Erro ao salvar conexão: ${error.message}`);
+
+  return jsonResponse({ ok: true, mp_user_id: mpUserId, live_mode: isLive });
+}
+
 async function oauthDisconnect(req: Request): Promise<Response> {
   const { userId } = await getAuthenticatedUser(req);
   const service = getServiceClient();
@@ -1144,6 +1177,7 @@ Deno.serve(async (req) => {
     if (path === "config-status" && req.method === "GET") return await getConfigStatus(req);
     if (path === "oauth-start" && req.method === "POST") return await oauthStart(req);
     if (path === "oauth-callback" && req.method === "GET") return await oauthCallback(req);
+    if (path === "manual-connect" && req.method === "POST") return await manualConnect(req);
     if (path === "disconnect" && req.method === "POST") return await oauthDisconnect(req);
     if (path === "create-pix" && req.method === "POST") return await createPix(req);
     if (path === "create-boleto" && req.method === "POST") return await createBoleto(req);
