@@ -540,6 +540,222 @@ export type Database = {
         }
         Relationships: []
       }
+      asaas_charges: {
+        Row: {
+          amount: number
+          asaas_payment_id: string | null
+          bank_slip_url: string | null
+          billing_type: string
+          client_id: string | null
+          created_at: string
+          demand_id: string | null
+          description: string | null
+          due_date: string
+          external_reference: string | null
+          financial_entry_id: string | null
+          id: string
+          invoice_url: string | null
+          metadata: Json | null
+          paid_at: string | null
+          pix_payload: string | null
+          pix_qr_code: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          asaas_payment_id?: string | null
+          bank_slip_url?: string | null
+          billing_type: string
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date: string
+          external_reference?: string | null
+          financial_entry_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          pix_payload?: string | null
+          pix_qr_code?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          asaas_payment_id?: string | null
+          bank_slip_url?: string | null
+          billing_type?: string
+          client_id?: string | null
+          created_at?: string
+          demand_id?: string | null
+          description?: string | null
+          due_date?: string
+          external_reference?: string | null
+          financial_entry_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          pix_payload?: string | null
+          pix_qr_code?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mercadolivre_connections: {
+        Row: {
+          access_token_encrypted: string
+          created_at: string
+          expires_at: string
+          id: string
+          metadata: Json | null
+          nickname: string | null
+          refresh_token_encrypted: string
+          seller_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          metadata?: Json | null
+          nickname?: string | null
+          refresh_token_encrypted: string
+          seller_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          metadata?: Json | null
+          nickname?: string | null
+          refresh_token_encrypted?: string
+          seller_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mercadolivre_orders: {
+        Row: {
+          buyer_id: string | null
+          buyer_name: string | null
+          currency_id: string | null
+          id: string
+          ml_order_id: string
+          ml_pack_id: string | null
+          order_date: string | null
+          raw_payload: Json | null
+          status: string
+          synced_at: string
+          total_amount: number
+          user_id: string
+        }
+        Insert: {
+          buyer_id?: string | null
+          buyer_name?: string | null
+          currency_id?: string | null
+          id?: string
+          ml_order_id: string
+          ml_pack_id?: string | null
+          order_date?: string | null
+          raw_payload?: Json | null
+          status: string
+          synced_at?: string
+          total_amount: number
+          user_id: string
+        }
+        Update: {
+          buyer_id?: string | null
+          buyer_name?: string | null
+          currency_id?: string | null
+          id?: string
+          ml_order_id?: string
+          ml_pack_id?: string | null
+          order_date?: string | null
+          raw_payload?: Json | null
+          status?: string
+          synced_at?: string
+          total_amount?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asaas_connections: {
+        Row: {
+          api_key_encrypted: string
+          created_at: string
+          environment: string
+          id: string
+          metadata: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted: string
+          created_at?: string
+          environment?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asaas_webhook_events: {
+        Row: {
+          event_type: string
+          id: string
+          payment_id: string
+          payload: Json
+          processed_at: string
+          user_id: string
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          payment_id: string
+          payload: Json
+          processed_at?: string
+          user_id: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          payment_id?: string
+          payload?: Json
+          processed_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chatgpt_integrations: {
         Row: {
           created_at: string
@@ -718,92 +934,155 @@ export type Database = {
       }
       clients: {
         Row: {
+          address_number: string | null
+          asaas_customer_id: string | null
+          asaas_sync_status: string | null
+          asaas_synced_at: string | null
+          birth_date: string | null
           city: string | null
           close_potential: Database["public"]["Enums"]["close_potential"] | null
+          cnpj: string | null
+          complement: string | null
           contact_name: string | null
+          country: string | null
+          cpf: string | null
           created_at: string
           email: string | null
           first_contact_at: string | null
+          full_name: string | null
           id: string
           instagram: string | null
           last_interaction_at: string | null
           lead_source: string | null
           lead_stage: Database["public"]["Enums"]["lead_stage"] | null
+          legal_name: string | null
           logo_url: string | null
+          mercado_livre_buyer_id: string | null
+          municipal_registration: string | null
           name: string
+          neighborhood: string | null
           next_action: string | null
           next_action_date: string | null
           notes: string | null
+          person_type: Database["public"]["Enums"]["person_type"] | null
           phone: string | null
+          rg: string | null
           sales_notes: string | null
           segment: string | null
           service_provided: string | null
           specialty: string | null
           state: string | null
+          state_registration: string | null
           status: Database["public"]["Enums"]["client_status"]
+          street: string | null
+          trade_name: string | null
           type: Database["public"]["Enums"]["client_type"]
           updated_at: string
           user_id: string
+          whatsapp: string | null
+          zip_code: string | null
         }
         Insert: {
+          address_number?: string | null
+          asaas_customer_id?: string | null
+          asaas_sync_status?: string | null
+          asaas_synced_at?: string | null
+          birth_date?: string | null
           city?: string | null
           close_potential?:
             | Database["public"]["Enums"]["close_potential"]
             | null
+          cnpj?: string | null
+          complement?: string | null
           contact_name?: string | null
+          country?: string | null
+          cpf?: string | null
           created_at?: string
           email?: string | null
           first_contact_at?: string | null
+          full_name?: string | null
           id?: string
           instagram?: string | null
           last_interaction_at?: string | null
           lead_source?: string | null
           lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          legal_name?: string | null
           logo_url?: string | null
+          mercado_livre_buyer_id?: string | null
+          municipal_registration?: string | null
           name: string
+          neighborhood?: string | null
           next_action?: string | null
           next_action_date?: string | null
           notes?: string | null
+          person_type?: Database["public"]["Enums"]["person_type"] | null
           phone?: string | null
+          rg?: string | null
           sales_notes?: string | null
           segment?: string | null
           service_provided?: string | null
           specialty?: string | null
           state?: string | null
+          state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
+          street?: string | null
+          trade_name?: string | null
           type?: Database["public"]["Enums"]["client_type"]
           updated_at?: string
           user_id: string
+          whatsapp?: string | null
+          zip_code?: string | null
         }
         Update: {
+          address_number?: string | null
+          asaas_customer_id?: string | null
+          asaas_sync_status?: string | null
+          asaas_synced_at?: string | null
+          birth_date?: string | null
           city?: string | null
           close_potential?:
             | Database["public"]["Enums"]["close_potential"]
             | null
+          cnpj?: string | null
+          complement?: string | null
           contact_name?: string | null
+          country?: string | null
+          cpf?: string | null
           created_at?: string
           email?: string | null
           first_contact_at?: string | null
+          full_name?: string | null
           id?: string
           instagram?: string | null
           last_interaction_at?: string | null
           lead_source?: string | null
           lead_stage?: Database["public"]["Enums"]["lead_stage"] | null
+          legal_name?: string | null
           logo_url?: string | null
+          mercado_livre_buyer_id?: string | null
+          municipal_registration?: string | null
           name?: string
+          neighborhood?: string | null
           next_action?: string | null
           next_action_date?: string | null
           notes?: string | null
+          person_type?: Database["public"]["Enums"]["person_type"] | null
           phone?: string | null
+          rg?: string | null
           sales_notes?: string | null
           segment?: string | null
           service_provided?: string | null
           specialty?: string | null
           state?: string | null
+          state_registration?: string | null
           status?: Database["public"]["Enums"]["client_status"]
+          street?: string | null
+          trade_name?: string | null
           type?: Database["public"]["Enums"]["client_type"]
           updated_at?: string
           user_id?: string
+          whatsapp?: string | null
+          zip_code?: string | null
         }
         Relationships: []
       }
@@ -2161,6 +2440,7 @@ export type Database = {
         | "perdido"
         | "inativo"
       notification_type: "info" | "success" | "warning" | "error"
+      person_type: "fisica" | "juridica"
       profile_role: "admin" | "designer" | "financeiro"
       project_status:
         | "briefing"
@@ -2337,6 +2617,7 @@ export const Constants = {
         "inativo",
       ],
       notification_type: ["info", "success", "warning", "error"],
+      person_type: ["fisica", "juridica"],
       profile_role: ["admin", "designer", "financeiro"],
       project_status: [
         "briefing",

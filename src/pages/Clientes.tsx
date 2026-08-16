@@ -1,10 +1,12 @@
 import { useClients, Client } from "@/hooks/useClients";
 import { useClientInteractions } from "@/hooks/useClientInteractions";
+import { useAsaasCharges } from "@/hooks/useAsaasCharges";
 import { useState, useMemo } from "react";
 import {
   Plus, Phone, Mail, Building2, MessageCircle, Edit, Trash2, Loader2,
   Search, Filter, LayoutGrid, List, Columns3, Instagram, MapPin,
   ChevronRight, Clock, Star, UserPlus, ArrowRight, GripVertical,
+  User, FileText, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WhatsAppDialog } from "@/components/whatsapp/WhatsAppDialog";
 import { PortalLinkDialog } from "@/components/portal/PortalLinkDialog";
-import { ClientLogoUpload } from "@/components/clients/ClientLogoUpload";
+import {
+  ClientFormDialog,
+  emptyClientForm,
+  clientToForm,
+  formToPayload,
+  type ClientFormData,
+} from "@/components/clients/ClientFormDialog";
+import { maskCPF, maskCNPJ, maskDocument, formatPhone, personTypeLabel } from "@/lib/document-utils";
 import type { Database } from "@/integrations/supabase/types";
 
 type ClientType = Database["public"]["Enums"]["client_type"];
@@ -41,14 +50,9 @@ const statusMap: Record<ClientStatus, { label: string; variant: "default" | "sec
 };
 
 const stageLabels: Record<LeadStage, string> = {
-  novo_lead: "Novo Lead",
-  contato_inicial: "Contato Inicial",
-  briefing: "Briefing",
-  proposta_enviada: "Proposta Enviada",
-  negociacao: "Negociação",
-  aprovado: "Aprovado",
-  perdido: "Perdido",
-  inativo: "Inativo",
+  novo_lead: "Novo Lead", contato_inicial: "Contato Inicial", briefing: "Briefing",
+  proposta_enviada: "Proposta Enviada", negociacao: "Negociação",
+  aprovado: "Aprovado", perdido: "Perdido", inativo: "Inativo",
 };
 
 const stageColors: Record<LeadStage, string> = {
@@ -63,12 +67,8 @@ const stageColors: Record<LeadStage, string> = {
 };
 
 const interactionLabels: Record<InteractionType, string> = {
-  ligacao: "Ligação",
-  whatsapp: "WhatsApp",
-  reuniao: "Reunião",
-  proposta: "Proposta",
-  followup: "Follow-up",
-  fechamento: "Fechamento",
+  ligacao: "Ligação", whatsapp: "WhatsApp", reuniao: "Reunião",
+  proposta: "Proposta", followup: "Follow-up", fechamento: "Fechamento",
   sem_retorno: "Sem Retorno",
 };
 
@@ -76,22 +76,13 @@ const potentialLabels: Record<ClosePotential, string> = { baixo: "Baixo", medio:
 
 const KANBAN_STAGES: LeadStage[] = ["novo_lead", "contato_inicial", "briefing", "proposta_enviada", "negociacao", "aprovado", "perdido"];
 
-const emptyForm = {
-  name: "", contact_name: "", email: "", phone: "", notes: "",
-  status: "ativo" as ClientStatus, type: "cliente" as ClientType,
-  lead_stage: "" as string, lead_source: "", segment: "", city: "", state: "",
-  instagram: "", specialty: "", service_provided: "",
-  first_contact_at: "", next_action: "", next_action_date: "",
-  sales_notes: "", close_potential: "" as string,
-  logo_url: null as string | null,
-};
-
 export default function Clientes() {
   const { clients, isLoading, create, update, remove } = useClients();
   const { interactions, create: createInteraction } = useClientInteractions();
+  const { syncClient, isSyncingClient } = useAsaasCharges();
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<ClientFormData>(emptyClientForm);
   const [filterType, setFilterType] = useState<"all" | ClientType>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | ClientStatus>("all");
   const [search, setSearch] = useState("");
@@ -110,65 +101,23 @@ export default function Clientes() {
 
   const openCreate = () => {
     setEditingClient(null);
-    setForm(emptyForm);
+    setForm(emptyClientForm);
     setOpen(true);
   };
 
   const openEdit = (c: Client) => {
     setEditingClient(c);
-    setForm({
-      name: c.name,
-      contact_name: c.contact_name || "",
-      email: c.email || "",
-      phone: c.phone || "",
-      notes: c.notes || "",
-      status: c.status,
-      type: c.type,
-      lead_stage: c.lead_stage || "",
-      lead_source: c.lead_source || "",
-      segment: c.segment || "",
-      city: c.city || "",
-      state: c.state || "",
-      instagram: c.instagram || "",
-      specialty: c.specialty || "",
-      service_provided: c.service_provided || "",
-      first_contact_at: c.first_contact_at || "",
-      next_action: c.next_action || "",
-      next_action_date: c.next_action_date || "",
-      sales_notes: c.sales_notes || "",
-      close_potential: c.close_potential || "",
-      logo_url: (c as any).logo_url ?? null,
-    });
+    setForm(clientToForm(c));
     setOpen(true);
   };
 
   const handleSubmit = () => {
     if (!form.name.trim()) return;
-    const payload = {
-      ...form,
-      lead_stage: (form.lead_stage || null) as LeadStage | null,
-      close_potential: (form.close_potential || null) as ClosePotential | null,
-      first_contact_at: form.first_contact_at || null,
-      next_action_date: form.next_action_date || null,
-      contact_name: form.contact_name || null,
-      email: form.email || null,
-      phone: form.phone || null,
-      notes: form.notes || null,
-      lead_source: form.lead_source || null,
-      segment: form.segment || null,
-      city: form.city || null,
-      state: form.state || null,
-      instagram: form.instagram || null,
-      specialty: form.specialty || null,
-      service_provided: form.service_provided || null,
-      next_action: form.next_action || null,
-      sales_notes: form.sales_notes || null,
-      logo_url: form.logo_url || null,
-    };
+    const payload = formToPayload(form);
     if (editingClient) {
       update.mutate({ id: editingClient.id, ...payload }, { onSuccess: () => setOpen(false) });
     } else {
-      create.mutate(payload, { onSuccess: () => { setOpen(false); setForm(emptyForm); } });
+      create.mutate(payload, { onSuccess: () => { setOpen(false); setForm(emptyClientForm); } });
     }
   };
 
@@ -202,7 +151,9 @@ export default function Clientes() {
         c.name.toLowerCase().includes(q) ||
         (c.contact_name || "").toLowerCase().includes(q) ||
         (c.email || "").toLowerCase().includes(q) ||
-        (c.segment || "").toLowerCase().includes(q)
+        (c.segment || "").toLowerCase().includes(q) ||
+        ((c as any).trade_name || "").toLowerCase().includes(q) ||
+        ((c as any).full_name || "").toLowerCase().includes(q)
       );
     }
     return result;
@@ -272,16 +223,18 @@ export default function Clientes() {
           {filteredClients.map(client => {
             const t = typeMap[client.type];
             const st = statusMap[client.status];
+            const personType = (client as any).person_type;
             return (
               <div key={client.id} className="flex items-center justify-between p-4 border-b border-border/30 last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailClient(client)}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Building2 className="h-4 w-4 text-primary" />
+                    {personType === "juridica" ? <Building2 className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-primary" />}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{client.name}</p>
                     <p className="text-xs text-muted-foreground truncate">
                       {client.contact_name}{client.segment ? ` • ${client.segment}` : ""}{client.city ? ` • ${client.city}` : ""}
+                      {personType && <span className="ml-1 text-[10px]">({personType === "fisica" ? "PF" : "PJ"})</span>}
                     </p>
                   </div>
                 </div>
@@ -350,8 +303,16 @@ export default function Clientes() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
+                  {(detailClient as any).person_type === "juridica"
+                    ? <Building2 className="h-5 w-5 text-primary" />
+                    : <User className="h-5 w-5 text-primary" />
+                  }
                   {detailClient.name}
+                  {(detailClient as any).person_type && (
+                    <Badge variant="outline" className="text-[10px] ml-1">
+                      {(detailClient as any).person_type === "fisica" ? "PF" : "PJ"}
+                    </Badge>
+                  )}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
@@ -362,17 +323,56 @@ export default function Clientes() {
                   {detailClient.close_potential && <span className="text-xs px-2 py-1 rounded-full bg-muted">{potentialLabels[detailClient.close_potential]}</span>}
                 </div>
 
+                {/* Dados PF/PJ */}
+                {(detailClient as any).person_type && (
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1 mb-2">
+                      <ShieldCheck className="h-3.5 w-3.5" />Dados Fiscais
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {(detailClient as any).full_name && <div><span className="text-muted-foreground text-xs">Nome Completo</span><p>{(detailClient as any).full_name}</p></div>}
+                      {(detailClient as any).trade_name && <div><span className="text-muted-foreground text-xs">Nome Fantasia</span><p>{(detailClient as any).trade_name}</p></div>}
+                      {(detailClient as any).cpf && <div><span className="text-muted-foreground text-xs">CPF</span><p className="font-mono text-xs">{maskCPF((detailClient as any).cpf)}</p></div>}
+                      {(detailClient as any).cnpj && <div><span className="text-muted-foreground text-xs">CNPJ</span><p className="font-mono text-xs">{maskCNPJ((detailClient as any).cnpj)}</p></div>}
+                      {(detailClient as any).rg && <div><span className="text-muted-foreground text-xs">RG</span><p className="font-mono text-xs">***{(detailClient as any).rg.slice(-3)}</p></div>}
+                      {(detailClient as any).birth_date && <div><span className="text-muted-foreground text-xs">Nascimento</span><p>{new Date((detailClient as any).birth_date).toLocaleDateString("pt-BR")}</p></div>}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {detailClient.contact_name && <div><span className="text-muted-foreground text-xs">Contato</span><p>{detailClient.contact_name}</p></div>}
                   {detailClient.email && <div><span className="text-muted-foreground text-xs">Email</span><p>{detailClient.email}</p></div>}
-                  {detailClient.phone && <div><span className="text-muted-foreground text-xs">Telefone</span><p>{detailClient.phone}</p></div>}
+                  {detailClient.phone && <div><span className="text-muted-foreground text-xs">Telefone</span><p>{formatPhone(detailClient.phone)}</p></div>}
+                  {(detailClient as any).whatsapp && <div><span className="text-muted-foreground text-xs">WhatsApp</span><p>{formatPhone((detailClient as any).whatsapp)}</p></div>}
                   {detailClient.instagram && <div><span className="text-muted-foreground text-xs">Instagram</span><p>{detailClient.instagram}</p></div>}
                   {detailClient.segment && <div><span className="text-muted-foreground text-xs">Segmento</span><p>{detailClient.segment}</p></div>}
-                  {(detailClient.city || detailClient.state) && <div><span className="text-muted-foreground text-xs">Localização</span><p>{[detailClient.city, detailClient.state].filter(Boolean).join(", ")}</p></div>}
                   {detailClient.lead_source && <div><span className="text-muted-foreground text-xs">Origem</span><p>{detailClient.lead_source}</p></div>}
                   {detailClient.specialty && <div><span className="text-muted-foreground text-xs">Especialidade</span><p>{detailClient.specialty}</p></div>}
                   {detailClient.service_provided && <div><span className="text-muted-foreground text-xs">Serviço</span><p>{detailClient.service_provided}</p></div>}
                 </div>
+
+                {/* Endereço */}
+                {((detailClient as any).street || (detailClient as any).zip_code || detailClient.city) && (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1 mb-2">
+                      <MapPin className="h-3.5 w-3.5" />Endereço
+                    </p>
+                    <p className="text-sm">
+                      {[(detailClient as any).street,
+                        (detailClient as any).address_number && `nº ${(detailClient as any).address_number}`,
+                        (detailClient as any).complement,
+                      ].filter(Boolean).join(", ")}
+                    </p>
+                    <p className="text-sm">
+                      {[(detailClient as any).neighborhood,
+                        detailClient.city,
+                        detailClient.state,
+                        (detailClient as any).zip_code && `CEP: ${(detailClient as any).zip_code}`,
+                      ].filter(Boolean).join(" - ")}
+                    </p>
+                  </div>
+                )}
 
                 {detailClient.next_action && (
                   <div className="bg-accent/30 p-3 rounded-lg">
@@ -387,6 +387,16 @@ export default function Clientes() {
                   <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); openEdit(detailClient); }}><Edit className="h-3.5 w-3.5 mr-1" />Editar</Button>
                   {detailClient.phone && <Button size="sm" variant="outline" onClick={() => { setDetailClient(null); setWaClient(detailClient); }}><MessageCircle className="h-3.5 w-3.5 mr-1" />WhatsApp</Button>}
                   <Button size="sm" variant="outline" onClick={() => { setInteractionClientId(detailClient.id); setInteractionOpen(true); }}><Plus className="h-3.5 w-3.5 mr-1" />Interação</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    onClick={() => syncClient(detailClient.id)}
+                    disabled={isSyncingClient}
+                  >
+                    {isSyncingClient ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                    {(detailClient as any).asaas_customer_id ? "Sincronizar Asaas" : "Cadastrar no Asaas"}
+                  </Button>
                   <PortalLinkDialog clientId={detailClient.id} />
                 </div>
 
@@ -418,99 +428,16 @@ export default function Clientes() {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingClient ? "Editar Contato" : "Novo Contato"}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nome *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-              <div><Label>Tipo</Label>
-                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as ClientType }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cliente">Cliente</SelectItem>
-                    <SelectItem value="lead">Lead</SelectItem>
-                    <SelectItem value="terceirizado">Terceirizado</SelectItem>
-                    <SelectItem value="parceiro">Parceiro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div><Label>Nome do Contato</Label><Input value={form.contact_name} onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
-              <div><Label>Telefone</Label><Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="5511999887766" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Status</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as ClientStatus }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lead">Lead</SelectItem>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Inativo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Instagram</Label><Input value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="@perfil" /></div>
-            </div>
-
-            {/* CRM fields */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Etapa do Lead</Label>
-                <Select value={form.lead_stage} onValueChange={v => setForm(f => ({ ...f, lead_stage: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(stageLabels) as LeadStage[]).map(s => <SelectItem key={s} value={s}>{stageLabels[s]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Potencial</Label>
-                <Select value={form.close_potential} onValueChange={v => setForm(f => ({ ...f, close_potential: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="baixo">Baixo</SelectItem>
-                    <SelectItem value="medio">Médio</SelectItem>
-                    <SelectItem value="alto">Alto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Origem</Label><Input value={form.lead_source} onChange={e => setForm(f => ({ ...f, lead_source: e.target.value }))} placeholder="Instagram, Indicação..." /></div>
-              <div><Label>Segmento</Label><Input value={form.segment} onChange={e => setForm(f => ({ ...f, segment: e.target.value }))} placeholder="Restaurante, Saúde..." /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Cidade</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} /></div>
-              <div><Label>Estado</Label><Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} /></div>
-            </div>
-
-            {/* Terceirizado fields */}
-            {form.type === "terceirizado" && (
-              <div className="grid grid-cols-2 gap-3 p-3 bg-info/5 rounded-lg border border-info/20">
-                <div><Label>Especialidade</Label><Input value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))} placeholder="Social Media, Design..." /></div>
-                <div><Label>Serviço Prestado</Label><Input value={form.service_provided} onChange={e => setForm(f => ({ ...f, service_provided: e.target.value }))} placeholder="Motion, Copy..." /></div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Primeiro Contato</Label><Input type="date" value={form.first_contact_at} onChange={e => setForm(f => ({ ...f, first_contact_at: e.target.value }))} /></div>
-              <div><Label>Data Próxima Ação</Label><Input type="date" value={form.next_action_date} onChange={e => setForm(f => ({ ...f, next_action_date: e.target.value }))} /></div>
-            </div>
-            <div><Label>Próxima Ação</Label><Input value={form.next_action} onChange={e => setForm(f => ({ ...f, next_action: e.target.value }))} placeholder="Enviar proposta, Follow-up..." /></div>
-            <div><Label>Notas Comerciais</Label><Textarea value={form.sales_notes} onChange={e => setForm(f => ({ ...f, sales_notes: e.target.value }))} /></div>
-            <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-
-            <ClientLogoUpload value={form.logo_url} onChange={(url) => setForm(f => ({ ...f, logo_url: url }))} />
-
-            <Button onClick={handleSubmit} className="w-full" disabled={isPending}>
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {editingClient ? "Salvar" : "Cadastrar"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Create/Edit Dialog — now uses the new ClientFormDialog component */}
+      <ClientFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        editingClient={editingClient}
+        form={form}
+        setForm={setForm}
+        onSubmit={handleSubmit}
+        isPending={isPending}
+      />
 
       {/* Interaction Dialog */}
       <Dialog open={interactionOpen} onOpenChange={setInteractionOpen}>
@@ -557,6 +484,7 @@ function ClientCard({ client, index, onEdit, onDelete, onWhatsApp, onDetail, onI
 }) {
   const t = typeMap[client.type];
   const st = statusMap[client.status];
+  const personType = (client as any).person_type;
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: index * 0.03 }}
@@ -564,7 +492,7 @@ function ClientCard({ client, index, onEdit, onDelete, onWhatsApp, onDetail, onI
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-primary" />
+            {personType === "juridica" ? <Building2 className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-primary" />}
           </div>
           <div>
             <p className="font-semibold text-sm">{client.name}</p>
@@ -577,13 +505,18 @@ function ClientCard({ client, index, onEdit, onDelete, onWhatsApp, onDetail, onI
         </div>
       </div>
 
-      {client.lead_stage && (
-        <div className="mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {client.lead_stage && (
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${stageColors[client.lead_stage]}`}>
             {stageLabels[client.lead_stage]}
           </span>
-        </div>
-      )}
+        )}
+        {personType && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground font-medium">
+            {personType === "fisica" ? "PF" : "PJ"}
+          </span>
+        )}
+      </div>
 
       <div className="flex gap-2 mb-3 flex-wrap">
         {client.phone && (

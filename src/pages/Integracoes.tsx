@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { CreditCard, Loader2, CheckCircle2, AlertCircle, MessageSquare, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ChatGPTIntegration } from "@/components/integrations/ChatGPTIntegration";
+import { AsaasIntegrationCard } from "@/components/integrations/AsaasIntegrationCard";
+import { MercadoLivreIntegrationCard } from "@/components/integrations/MercadoLivreIntegrationCard";
 
 export default function Integracoes() {
   const { status, connect, disconnect } = useMpConnection();
@@ -120,6 +122,12 @@ export default function Integracoes() {
           </div>
         )}
       </div>
+
+      {/* Asaas Integracao */}
+      <AsaasIntegrationCard />
+
+      {/* Mercado Livre Integracao */}
+      <MercadoLivreIntegrationCard />
 
       {/* ChatGPT Actions */}
       <ChatGPTIntegration />

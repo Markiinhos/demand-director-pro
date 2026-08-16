@@ -20,3 +20,27 @@ verify_jwt = false
 
 [functions.chatgpt-keys]
 verify_jwt = true
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.asaas-connect]
+verify_jwt = true
+
+[functions.asaas-sync-customer]
+verify_jwt = true
+
+[functions.asaas-create-charge]
+verify_jwt = true
+
+[functions.mercadolivre-webhook]
+verify_jwt = false
+
+[functions.mercadolivre-auth]
+verify_jwt = true
+
+[functions.mercadolivre-orders]
+verify_jwt = true
+
+[functions.mercadolivre-refresh]
+verify_jwt = true
